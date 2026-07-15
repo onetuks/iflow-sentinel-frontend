@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>iFlow Sentinel — 목업</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#F4F5FA; --surface:#FFFFFF; --surface-2:#FAFBFE; --side:#FBFBFE;
+    --ink:#1A1E2E; --muted:#6C7385; --faint:#A2A8B6;
+    --primary:#4C5DF0; --primary-600:#3E4FDC; --primary-tint:#EDEFFE; --primary-tint-2:#F4F5FF;
+    --line:#EBEDF3; --line-2:#E0E3EC;
+    --pass:#0E9F6E; --pass-bg:#E7F7F0; --pass-line:#B9E7D4;
+    --warn:#D08214; --warn-bg:#FCF3E2; --warn-line:#EFD8A6;
+    --fail:#E23C5B; --fail-bg:#FCEBEF; --fail-line:#F6C7D2;
+    --dev:#6366F1; --qas:#D08214; --prd:#0E9F6E;
+    --sans:'Inter',system-ui,sans-serif;
+    --disp:'Plus Jakarta Sans',var(--sans);
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --r:16px; --r-sm:11px; --r-xs:8px;
+    --sh-sm:0 1px 2px rgba(26,30,46,.05),0 1px 3px rgba(26,30,46,.04);
+    --sh:0 2px 6px rgba(26,30,46,.05),0 10px 28px rgba(26,30,46,.06);
+    --sh-lg:0 8px 40px rgba(26,30,46,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .mono{font-family:var(--mono)}
+  button{font-family:inherit;cursor:pointer}
+  ::selection{background:#D7DCFB}
+  a{color:inherit}
+
+  .app{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+
+  /* ---------- sidebar ---------- */
+  .side{background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  .brand{display:flex;align-items:center;gap:11px;padding:20px 20px 14px}
+  .brand .mark{width:34px;height:34px;border-radius:11px;background:linear-gradient(145deg,#6E7BF5,#4C5DF0 60%,#3A3FD0);display:grid;place-items:center;flex:0 0 auto;box-shadow:0 4px 12px rgba(76,93,240,.35)}
+  .brand .mark svg{width:18px;height:18px}
+  .brand b{font-family:var(--disp);font-weight:700;font-size:16px;letter-spacing:-.01em;line-height:1}
+  .brand small{display:block;color:var(--faint);font-size:11px;font-weight:500;margin-top:3px;letter-spacing:.02em}
+
+  /* project switcher */
+  .switcher{margin:6px 14px 10px;position:relative}
+  .sw-btn{width:100%;display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line-2);background:var(--surface);border-radius:12px;box-shadow:var(--sh-sm);transition:.14s}
+  .sw-btn:hover{border-color:#D2D6E2;box-shadow:var(--sh)}
+  .sw-btn .pj{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#fff;font-family:var(--disp);font-weight:700;font-size:13px;flex:0 0 auto;background:linear-gradient(140deg,#F0A35E,#E0663C)}
+  .sw-btn .nm{text-align:left;line-height:1.1;overflow:hidden}
+  .sw-btn .nm b{font-family:var(--disp);font-weight:600;font-size:13.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sw-btn .nm small{color:var(--faint);font-size:10.5px}
+  .sw-btn .chev{margin-left:auto;color:var(--faint)}
+  .sw-menu{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--line-2);border-radius:12px;box-shadow:var(--sh-lg);padding:6px;z-index:20;display:none}
+  .sw-menu.open{display:block;animation:pop .16s ease}
+  @keyframes pop{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  .sw-item{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:9px;cursor:pointer}
+  .sw-item:hover{background:var(--surface-2)}
+  .sw-item .pj{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:#fff;font-family:var(--disp);font-weight:700;font-size:12px;flex:0 0 auto}
+  .sw-item b{font-size:13px;font-weight:600;font-family:var(--disp)}
+  .sw-item .ck{margin-left:auto;color:var(--primary)}
+
+  .nav{padding:4px 12px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+  .nav-label{font-size:10.5px;letter-spacing:.06em;color:var(--faint);padding:14px 10px 5px;font-weight:600;text-transform:uppercase}
+  .nav a{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:10px;text-decoration:none;color:var(--muted);font-size:13.5px;font-weight:500;transition:.13s}
+  .nav a svg{width:17px;height:17px;flex:0 0 auto;opacity:.8}
+  .nav a:hover{background:var(--surface-2);color:var(--ink)}
+  .nav a.active{background:var(--primary-tint);color:var(--primary-600);font-weight:600}
+  .nav a.active svg{opacity:1}
+  .nav a .tag{margin-left:auto;font-size:11px;background:var(--surface-2);border:1px solid var(--line);padding:0 7px;border-radius:20px;color:var(--muted);font-weight:600}
+  .nav a.active .tag{background:#fff;border-color:var(--primary-line);color:var(--primary-600)}
+
+  .side-foot{margin-top:auto;padding:14px 16px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .side-foot .ava{width:30px;height:30px;border-radius:50%;background:linear-gradient(140deg,#6E7BF5,#4C5DF0);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;font-family:var(--disp)}
+  .side-foot .who{font-size:12.5px;line-height:1.25;font-weight:500}
+  .side-foot .who small{color:var(--faint);font-size:11px;font-weight:400}
+
+  /* ---------- main ---------- */
+  .main{display:flex;flex-direction:column;min-width:0}
+  .topbar{height:60px;background:rgba(244,245,250,.8);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 30px;position:sticky;top:0;z-index:10}
+  .crumb{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .crumb .pjname{color:var(--ink);font-weight:600;font-family:var(--disp)}
+  .crumb .sep{color:var(--faint)}
+  .crumb b{color:var(--ink);font-weight:600}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:7px 12px;color:var(--faint);font-size:12.5px;width:200px}
+  .search svg{width:15px;height:15px}
+  .icon-btn{width:36px;height:36px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);display:grid;place-items:center;color:var(--muted)}
+  .icon-btn:hover{color:var(--ink);border-color:#D2D6E2}
+  .icon-btn svg{width:17px;height:17px}
+
+  .content{padding:28px 30px 40px;max-width:1200px;width:100%}
+  .screen{display:none}
+  .screen.active{display:block;animation:fade .28s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.screen,.sw-menu.open{animation:none}}
+
+  .page-h{display:flex;align-items:center;gap:14px;margin-bottom:22px;min-height:44px}
+  .page-h h1{font-family:var(--disp);font-size:24px;font-weight:700;margin:0;letter-spacing:-.02em}
+  .page-h .sub{color:var(--muted);font-size:13px;margin-top:3px}
+  .page-h .acts{margin-left:auto;display:flex;gap:9px;flex:0 0 auto}
+
+  /* buttons */
+  .btn{border:1px solid var(--line-2);background:var(--surface);color:var(--ink);padding:9px 15px;border-radius:11px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:7px;transition:.14s;white-space:nowrap;box-shadow:var(--sh-sm)}
+  .btn:hover{border-color:#D0D5E1;transform:translateY(-1px);box-shadow:var(--sh)}
+  .btn svg{width:15px;height:15px}
+  .btn.primary{background:linear-gradient(135deg,#5666F2,#4C5DF0);border-color:transparent;color:#fff;box-shadow:0 4px 14px rgba(76,93,240,.32)}
+  .btn.primary:hover{box-shadow:0 6px 20px rgba(76,93,240,.42)}
+  .btn.ghost{border-color:transparent;background:transparent;box-shadow:none;color:var(--muted)}
+  .btn.ghost:hover{background:var(--surface-2);color:var(--ink);transform:none}
+  .btn.sm{padding:6px 11px;font-size:12px;border-radius:9px}
+  @media (prefers-reduced-motion:reduce){.btn:hover{transform:none}}
+
+  /* cards */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+  .card-h{padding:16px 20px;display:flex;align-items:center;gap:10px}
+  .card-h+.card-body,.card-h+table{border-top:1px solid var(--line)}
+  .card-h h3{margin:0;font-size:14.5px;font-weight:600;font-family:var(--disp)}
+  .card-h .sub{color:var(--faint);font-size:12px;font-weight:500}
+  .card-h .hact{margin-left:auto;display:flex;gap:7px}
+  .card-body{padding:20px}
+
+  .grid{display:grid;gap:18px}
+  .g-4{grid-template-columns:repeat(4,1fr)}
+  .g-3{grid-template-columns:repeat(3,1fr)}
+  .g-2{grid-template-columns:1.12fr .88fr}
+  .g-2e{grid-template-columns:1fr 1fr}
+  @media(max-width:940px){.g-4{grid-template-columns:repeat(2,1fr)}.g-2,.g-3,.g-2e{grid-template-columns:1fr}.app{grid-template-columns:1fr}.side{display:none}}
+
+  /* landscape pipeline */
+  .pipe{display:flex;align-items:stretch;gap:0}
+  .env{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:18px;position:relative}
+  .pipe .conn{width:34px;flex:0 0 auto;display:grid;place-items:center;color:var(--faint)}
+  .pipe .conn svg{width:20px;height:20px}
+  .env .etop{display:flex;align-items:center;gap:9px;margin-bottom:13px}
+  .env .ebadge{font-family:var(--mono);font-size:11px;font-weight:600;padding:3px 9px;border-radius:7px;letter-spacing:.02em}
+  .ebadge.dev{color:var(--dev);background:#EEF0FE}
+  .ebadge.qas{color:var(--qas);background:var(--warn-bg)}
+  .ebadge.prd{color:var(--prd);background:var(--pass-bg)}
+  .env .conn-dot{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+  .env .conn-dot i{width:7px;height:7px;border-radius:50%;background:var(--pass);box-shadow:0 0 0 3px var(--pass-bg)}
+  .env .turl{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:14px}
+  .env .everdict{display:flex;align-items:center;justify-content:space-between}
+  .env .everdict small{color:var(--faint);font-size:11px}
+
+  /* stats */
+  .stat{padding:18px 20px}
+  .stat .lbl{font-size:12px;color:var(--muted);font-weight:500;display:flex;align-items:center;gap:8px}
+  .stat .lbl .si{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--primary-tint-2);color:var(--primary)}
+  .stat .lbl .si svg{width:14px;height:14px}
+  .stat .val{font-family:var(--disp);font-size:29px;font-weight:700;letter-spacing:-.02em;margin-top:12px;line-height:1}
+  .stat .val small{font-size:14px;color:var(--faint);font-weight:600}
+  .stat .bar{margin-top:13px;height:6px;border-radius:20px;background:var(--line);overflow:hidden;display:flex}
+  .stat .bar i{display:block;height:100%}
+  .stat .meta{font-size:11.5px;color:var(--muted);margin-top:10px;font-weight:500}
+
+  /* pills */
+  .pill{font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:5px;border:1px solid;font-family:var(--mono)}
+  .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+  .pill.plain::before{display:none}
+  .pill.pass{color:var(--pass);background:var(--pass-bg);border-color:var(--pass-line)}
+  .pill.warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-line)}
+  .pill.fail{color:var(--fail);background:var(--fail-bg);border-color:var(--fail-line)}
+  .pill.neutral{color:var(--muted);background:var(--surface-2);border-color:var(--line-2)}
+  .pill.indigo{color:var(--primary-600);background:var(--primary-tint);border-color:#D5DAFB}
+
+  /* tables */
+  table{width:100%;border-collapse:collapse}
+  thead th{text-align:left;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-weight:600;padding:12px 18px;border-bottom:1px solid var(--line)}
+  tbody td{padding:13px 18px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr{transition:background .12s}
+  tbody tr:hover{background:var(--surface-2)}
+  td .m{font-family:var(--mono);font-size:12.5px;color:var(--primary-600)}
+  td .art{font-family:var(--mono);font-size:12.5px;font-weight:500}
+  .loc{color:var(--muted);font-size:12.5px}
+
+  /* forms */
+  .field{margin-bottom:16px}
+  .field:last-child{margin-bottom:0}
+  .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:7px;color:#3B4257}
+  .field .hint{font-size:11.5px;color:var(--faint);margin-top:6px}
+  input[type=text],select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:11px;font-family:var(--sans);font-size:13px;color:var(--ink);background:var(--surface);transition:.14s}
+  input.mono{font-family:var(--mono);font-size:12.5px}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(76,93,240,.15)}
+  textarea{resize:vertical}
+  select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236C7385' stroke-width='2.2'><path d='M6 9l6 6 6-6'/></svg>");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+  .seg{display:inline-flex;border:1px solid var(--line-2);border-radius:11px;overflow:hidden;background:var(--surface)}
+  .seg button{border:none;background:transparent;padding:9px 16px;font-size:12.5px;font-weight:600;color:var(--muted);border-right:1px solid var(--line);font-family:var(--mono);transition:.12s}
+  .seg button:last-child{border-right:none}
+  .seg button.on[data-sev=fail]{background:var(--fail-bg);color:var(--fail)}
+  .seg button.on[data-sev=warn]{background:var(--warn-bg);color:var(--warn)}
+  .seg button.on[data-sev=info]{background:var(--primary-tint);color:var(--primary-600)}
+
+  .tags{display:flex;flex-wrap:wrap;gap:7px;padding:8px 9px;border:1px solid var(--line-2);border-radius:11px;background:var(--surface);align-items:center}
+  .tags .tag{font-family:var(--mono);font-size:12px;background:var(--primary-tint);color:var(--primary-600);border:1px solid #D5DAFB;padding:4px 9px;border-radius:8px;display:inline-flex;align-items:center;gap:7px}
+  .tags .tag button{border:none;background:none;color:var(--primary-600);opacity:.55;font-size:14px;line-height:1;padding:0}
+  .tags .tag button:hover{opacity:1}
+  .tags input{border:none;flex:1;min-width:80px;padding:5px;font-family:var(--mono);font-size:12.5px}
+  .tags input:focus{box-shadow:none}
+
+  /* reserved status slot (prevents layout shift) */
+  .status-slot{min-height:34px;display:flex;align-items:center;margin:2px 0 14px}
+  .actions-bar{display:flex;align-items:center;gap:10px}
+  .actions-bar .spacer{flex:1}
+
+  /* yaml */
+  .yaml{background:#171B2E;border-radius:var(--r);overflow:hidden;position:sticky;top:78px;box-shadow:var(--sh-lg)}
+  .yaml-h{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
+  .yaml-h .lights{display:flex;gap:7px}.yaml-h .lights i{width:11px;height:11px;border-radius:50%;display:block}
+  .yaml-h .fn{font-family:var(--mono);font-size:12px;color:#8B94AD;margin-left:5px}
+  .yaml-h .live{margin-left:auto;font-family:var(--mono);font-size:11px;color:#5FD69C;display:flex;align-items:center;gap:6px}
+  .yaml-h .live::before{content:"";width:6px;height:6px;border-radius:50%;background:#5FD69C;box-shadow:0 0 0 3px rgba(95,214,156,.22)}
+  pre.code{margin:0;padding:18px;font-family:var(--mono);font-size:12.5px;line-height:1.75;color:#D9DFEE;overflow:auto;white-space:pre;tab-size:2}
+  .code .k{color:#93B7F5}.code .s{color:#8FDCA6}.code .c{color:#697291;font-style:italic}.code .n{color:#E6C578}.code .p{color:#C9A6EC}
+
+  /* gate */
+  .gate{border-radius:var(--r);overflow:hidden;border:1px solid var(--fail-line);background:linear-gradient(135deg,#FEF3F5,#FCEBEF);box-shadow:var(--sh)}
+  .gate.pass{border-color:var(--pass-line);background:linear-gradient(135deg,#EFFAF4,#E7F7F0)}
+  .gate-in{display:flex;align-items:center;gap:22px;padding:22px 26px;flex-wrap:wrap}
+  .gate .verdict{font-family:var(--disp);font-weight:700;font-size:14px;letter-spacing:.06em;padding:11px 18px;border-radius:12px;color:#fff;display:flex;align-items:center;gap:10px;white-space:nowrap;box-shadow:0 6px 18px rgba(226,60,91,.32)}
+  .gate.pass .verdict{box-shadow:0 6px 18px rgba(14,159,110,.3)}
+  .gate .verdict.f{background:linear-gradient(135deg,#EF5573,#E23C5B)}
+  .gate .verdict.p{background:linear-gradient(135deg,#22B981,#0E9F6E)}
+  .gate .verdict svg{width:18px;height:18px}
+  .gate .msg h2{margin:0 0 4px;font-size:15.5px;font-family:var(--disp);font-weight:700}
+  .gate .msg p{margin:0;color:#96555f;font-size:12.5px}
+  .gate.pass .msg p{color:#4a7d68}
+  .gate .counts{margin-left:auto;display:flex;gap:26px;text-align:center}
+  .gate .counts div{line-height:1}
+  .gate .counts .n{font-family:var(--disp);font-size:26px;font-weight:700}
+  .gate .counts .l{font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:6px}
+  .gate .counts .pass .n{color:var(--pass)}.gate .counts .warn .n{color:var(--warn)}.gate .counts .fail .n{color:var(--fail)}
+
+  .row-between{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .list-sep>*+*{border-top:1px solid var(--line)}
+  .rsitem{display:flex;align-items:center;gap:14px;padding:15px 20px}
+  .rsitem .ic{width:38px;height:38px;border-radius:11px;background:var(--primary-tint);color:var(--primary);display:grid;place-items:center;flex:0 0 auto}
+  .rsitem .ic svg{width:19px;height:19px}
+  .rsitem h4{margin:0;font-size:13.5px;font-family:var(--mono);font-weight:600}
+  .rsitem p{margin:3px 0 0;font-size:12px;color:var(--muted)}
+  .rsitem .meta{margin-left:auto;display:flex;align-items:center;gap:12px}
+  .ver{font-family:var(--mono);font-size:11.5px;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);padding:3px 9px;border-radius:8px}
+
+  .checks{display:flex;flex-direction:column;gap:9px}
+  .chk{display:flex;align-items:center;gap:12px;padding:12px 15px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);cursor:pointer;transition:.12s}
+  .chk:hover{border-color:var(--line-2);background:#fff}
+  .chk input{width:17px;height:17px;accent-color:var(--primary)}
+  .chk .art{font-family:var(--mono);font-size:13px;font-weight:500}
+  .chk .p2{margin-left:auto;font-size:11.5px;color:var(--faint);font-family:var(--mono)}
+
+  .info-note{display:flex;gap:11px;padding:13px 16px;background:var(--primary-tint-2);border:1px solid #E1E5FD;border-radius:12px;font-size:12.5px;color:#42496B;line-height:1.5}
+  .info-note svg{width:17px;height:17px;flex:0 0 auto;color:var(--primary);margin-top:1px}
+
+  .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:#171B2E;color:#fff;padding:12px 20px;border-radius:12px;font-size:13px;display:flex;align-items:center;gap:10px;box-shadow:var(--sh-lg);opacity:0;pointer-events:none;transition:.28s;z-index:50}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast svg{width:17px;height:17px;color:#5FD69C}
+
+  .env-tabs{display:inline-flex;gap:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:4px}
+  .env-tabs button{border:none;background:transparent;padding:7px 15px;border-radius:8px;font-size:12.5px;font-weight:600;font-family:var(--mono);color:var(--muted)}
+  .env-tabs button.on{background:#fff;color:var(--ink);box-shadow:var(--sh-sm)}
+
+  /* rule list (전역/프로젝트 grouped) */
+  .rl-group{padding:8px 10px 14px}
+  .rl-group+.rl-group{border-top:1px solid var(--line)}
+  .rl-label{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--muted);padding:8px 8px 8px;letter-spacing:.01em}
+  .rl-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:9px;cursor:pointer;font-size:12.5px}
+  .rl-item:hover{background:var(--surface-2)}
+  .rl-item.on{background:var(--primary-tint);box-shadow:inset 0 0 0 1px #D5DAFB}
+  .rl-add{display:flex;align-items:center;gap:7px;width:100%;padding:9px 10px;margin-top:2px;border:1px dashed var(--line-2);border-radius:9px;background:transparent;color:var(--muted);font-size:12px;font-weight:600}
+  .rl-add:hover{border-color:var(--primary);color:var(--primary-600);background:var(--primary-tint-2)}
+
+  .seg.wide{display:flex;width:100%}
+  .seg.wide button{flex:1;padding:9px 10px;font-family:var(--sans);font-weight:600}
+  .seg.wide button.on{background:var(--primary-tint);color:var(--primary-600)}
+
+  /* reserved banner slot: fixed min-height so switching content never shifts fields below */
+  .scope-banner:not(:empty){margin-bottom:16px}
+  .scope-banner .info-note{margin:0}
+
+  /* applied-rules overview (적용 규칙 screen) */
+  .ap-head{display:grid;grid-template-columns:1fr 150px 1.3fr 70px 64px;gap:10px;padding:10px 20px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-weight:600;border-bottom:1px solid var(--line)}
+  .ap-row{display:grid;grid-template-columns:1fr 150px 1.3fr 70px 64px;gap:10px;align-items:center;padding:13px 20px}
+  .ap-name{display:flex;align-items:center;min-width:0}
+  .ap-row.pjr-off{opacity:.5}
+  @media(max-width:1040px){.ap-head{display:none}.ap-row{grid-template-columns:1fr}}
+
+  .switch{position:relative;display:inline-block;width:38px;height:22px;flex:0 0 auto}
+  .switch input{opacity:0;width:0;height:0;position:absolute}
+  .switch .slider{position:absolute;inset:0;background:var(--line-2);border-radius:20px;transition:.16s;cursor:pointer}
+  .switch .slider::before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.16s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+  .switch input:checked+.slider{background:var(--primary)}
+  .switch input:checked+.slider::before{transform:translateX(16px)}
+
+  /* custom-expression builder */
+  .cond-row{display:flex;gap:8px;align-items:center;margin-bottom:9px;flex-wrap:wrap}
+  .cond-row select{width:auto;flex:1 1 120px;min-width:100px}
+  .cond-row input{width:70px;flex:0 0 auto}
+  .cond-and{font-family:var(--mono);font-size:11px;color:var(--faint);font-weight:600;padding:2px 0}
+  .schema-chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{font-family:var(--mono);font-size:11.5px;padding:5px 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface-2);color:var(--primary-600)}
+  .chip:hover{border-color:var(--primary);background:var(--primary-tint-2)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="side">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 4.4 3.4 8 8 10 4.6-2 8-5.6 8-10V6l-8-4Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+      <div><b>iFlow Sentinel</b><small>규칙 준수 체커</small></div>
+    </div>
+
+    <div class="switcher">
+      <button class="sw-btn" id="swBtn">
+        <span class="pj" id="swPj">S</span>
+        <span class="nm"><b id="swName">S-Oil IS 전환</b><small>프로젝트 · DEV/QAS/PRD</small></span>
+        <span class="chev"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 9 4-4 4 4M8 15l4 4 4-4"/></svg></span>
+      </button>
+      <div class="sw-menu" id="swMenu">
+        <div class="sw-item" data-pj="S-Oil IS 전환" data-i="S" data-g="#F0A35E,#E0663C"><span class="pj" style="background:linear-gradient(140deg,#F0A35E,#E0663C)">S</span><b>S-Oil IS 전환</b><span class="ck"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></span></div>
+        <div class="sw-item" data-pj="NanoH2O IS 전환" data-i="N" data-g="#5AC8E0,#3E8BD0"><span class="pj" style="background:linear-gradient(140deg,#5AC8E0,#3E8BD0)">N</span><b>NanoH2O IS 전환</b></div>
+        <div class="sw-item" data-pj="Hynix 신규 개발" data-i="H" data-g="#8B7DF0,#5B4BD0"><span class="pj" style="background:linear-gradient(140deg,#8B7DF0,#5B4BD0)">H</span><b>Hynix 신규 개발</b></div>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <a data-s="overview" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>개요</span></a>
+      <a data-s="landscape"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 22V7l8-5 8 5v15"/><path d="M9 22v-6h6v6"/></svg><span>랜드스케이프</span><span class="tag">3</span></a>
+      <a data-s="rulesets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16M4 12h11M4 19h14"/><circle cx="19" cy="12" r="2"/></svg><span>적용 규칙</span></a>
+      <a data-s="run"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>검사 실행</span></a>
+      <a data-s="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg><span>검사 리포트</span></a>
+      <div class="nav-label">전역</div>
+      <a data-s="library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg><span>규칙</span></a>
+    </nav>
+
+    <div class="side-foot">
+      <span class="ava">박</span>
+      <div class="who">박세영<br><small>Integration Dev</small></div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb"><span class="pjname" id="cbPj">S-Oil IS 전환</span><span class="sep">/</span><b id="cbScreen">개요</b></div>
+      <div class="right">
+        <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>iFlow 검색…</div>
+        <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
+      </div>
+    </div>
+    <div class="content">
+
+      <!-- ===== 개요 ===== -->
+      <section class="screen active" id="overview">
+        <div class="page-h">
+          <div><h1>개요</h1><div class="sub">S-Oil IS 전환 · 랜드스케이프 상태와 최근 검사</div></div>
+          <div class="acts"><button class="btn primary" data-go="run"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>새 검사 실행</button></div>
+        </div>
+
+        <!-- landscape pipeline -->
+        <div class="pipe" style="margin-bottom:18px">
+          <div class="env">
+            <div class="etop"><span class="ebadge dev">DEV</span><span class="conn-dot"><i></i>연결됨</span></div>
+            <div class="turl">soil-dev.integrationsuite.cfapps…</div>
+            <div class="everdict"><span class="pill pass plain">통과</span><small>최근 09:14</small></div>
+          </div>
+          <div class="conn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          <div class="env">
+            <div class="etop"><span class="ebadge qas">QAS</span><span class="conn-dot"><i></i>연결됨</span></div>
+            <div class="turl">soil-qas.integrationsuite.cfapps…</div>
+            <div class="everdict"><span class="pill fail plain">보류 권고</span><small>최근 13:20</small></div>
+          </div>
+          <div class="conn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          <div class="env">
+            <div class="etop"><span class="ebadge prd">PRD</span><span class="conn-dot"><i></i>연결됨</span></div>
+            <div class="turl">soil-prd.integrationsuite.cfapps…</div>
+            <div class="everdict"><span class="pill pass plain">통과</span><small>3일 전</small></div>
+          </div>
+        </div>
+
+        <div class="grid g-4" style="margin-bottom:18px">
+          <div class="card stat">
+            <div class="lbl"><span class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span>QAS 통과율</div>
+            <div class="val">82<small>%</small></div>
+            <div class="bar"><i style="width:82%;background:var(--pass)"></i><i style="width:18%;background:var(--fail-line)"></i></div>
+          </div>
+          <div class="card stat">
+            <div class="lbl"><span class="si" style="background:var(--fail-bg);color:var(--fail)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg></span>열린 위반</div>
+            <div class="val" style="color:var(--fail)">2<small style="color:var(--warn)"> / 3 warn</small></div>
+            <div class="bar"><i style="width:20%;background:var(--fail)"></i><i style="width:30%;background:var(--warn)"></i><i style="width:50%;background:var(--pass-line)"></i></div>
+          </div>
+          <div class="card stat">
+            <div class="lbl"><span class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22V7l8-5 8 5v15"/></svg></span>랜드스케이프</div>
+            <div class="val">3<small> 환경</small></div>
+            <div class="meta">DEV · QAS · PRD (전용)</div>
+          </div>
+          <div class="card stat">
+            <div class="lbl"><span class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 12h11M4 19h14"/></svg></span>적용 규칙</div>
+            <div class="val">8</div>
+            <div class="meta">전역 4 · 프로젝트 4</div>
+          </div>
+        </div>
+
+        <div class="grid g-2">
+          <div class="card">
+            <div class="card-h"><h3>최근 검사</h3><span class="sub">환경별 실행 이력</span><div class="hact"><button class="btn sm ghost" data-go="report">전체 보기</button></div></div>
+            <table>
+              <thead><tr><th>환경</th><th>실행 시각</th><th>결과</th><th style="text-align:right">판정</th></tr></thead>
+              <tbody>
+                <tr><td><span class="pill warn plain mono" style="font-size:10.5px">QAS</span></td><td class="loc mono" style="font-size:12px">2026-07-13 13:20</td><td><span class="pill pass">12</span> <span class="pill warn">3</span> <span class="pill fail">2</span></td><td style="text-align:right"><span class="pill fail plain">보류 권고</span></td></tr>
+                <tr><td><span class="pill indigo plain mono" style="font-size:10.5px">DEV</span></td><td class="loc mono" style="font-size:12px">2026-07-13 09:14</td><td><span class="pill pass">14</span></td><td style="text-align:right"><span class="pill pass plain">통과</span></td></tr>
+                <tr><td><span class="pill pass plain mono" style="font-size:10.5px">PRD</span></td><td class="loc mono" style="font-size:12px">2026-07-10 16:02</td><td><span class="pill pass">14</span></td><td style="text-align:right"><span class="pill pass plain">통과</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="card-h"><h3>규칙별 위반 상위</h3><span class="sub">최근 30일</span></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
+              <div><div class="row-between" style="margin-bottom:7px"><span class="mono" style="font-size:12.5px;color:var(--primary-600)">no-hardcoded-endpoint</span><b class="mono" style="font-size:12.5px">8</b></div><div class="stat bar" style="margin:0"><i style="width:80%;background:var(--fail)"></i></div></div>
+              <div><div class="row-between" style="margin-bottom:7px"><span class="mono" style="font-size:12.5px;color:var(--primary-600)">must-have-error-handler</span><b class="mono" style="font-size:12.5px">5</b></div><div class="stat bar" style="margin:0"><i style="width:50%;background:var(--warn)"></i></div></div>
+              <div><div class="row-between" style="margin-bottom:7px"><span class="mono" style="font-size:12.5px;color:var(--primary-600)">sender-naming</span><b class="mono" style="font-size:12.5px">4</b></div><div class="stat bar" style="margin:0"><i style="width:40%;background:var(--fail)"></i></div></div>
+              <div><div class="row-between" style="margin-bottom:7px"><span class="mono" style="font-size:12.5px;color:var(--primary-600)">required-logging</span><b class="mono" style="font-size:12.5px">3</b></div><div class="stat bar" style="margin:0"><i style="width:30%;background:var(--warn)"></i></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 랜드스케이프 ===== -->
+      <section class="screen" id="landscape">
+        <div class="page-h">
+          <div><h1>랜드스케이프</h1><div class="sub">이 프로젝트 전용 DEV · QAS · PRD 테넌트</div></div>
+          <div class="acts"><button class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>테넌트 추가</button></div>
+        </div>
+
+        <div class="info-note" style="margin-bottom:18px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <span>테넌트는 <b>이 프로젝트에 종속</b>되며 다른 프로젝트와 공유되지 않습니다. 각 환경(DEV/QAS/PRD)은 별도 OData 엔드포인트와 자격증명을 갖습니다.</span>
+        </div>
+
+        <div class="grid g-3" style="margin-bottom:18px">
+          <div class="card stat">
+            <div class="etop" style="display:flex;align-items:center;gap:9px;margin-bottom:14px"><span class="ebadge dev">DEV</span><span class="conn-dot" style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)"><i style="width:7px;height:7px;border-radius:50%;background:var(--pass);box-shadow:0 0 0 3px var(--pass-bg)"></i>정상</span></div>
+            <div class="turl mono" style="font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">soil-dev.integrationsuite.cfapps…</div>
+            <div class="loc mono" style="margin-top:10px;font-size:11.5px">CF · 22 패키지</div>
+          </div>
+          <div class="card stat">
+            <div class="etop" style="display:flex;align-items:center;gap:9px;margin-bottom:14px"><span class="ebadge qas">QAS</span><span class="conn-dot" style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)"><i style="width:7px;height:7px;border-radius:50%;background:var(--pass);box-shadow:0 0 0 3px var(--pass-bg)"></i>정상</span></div>
+            <div class="turl mono" style="font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">soil-qas.integrationsuite.cfapps…</div>
+            <div class="loc mono" style="margin-top:10px;font-size:11.5px">CF · 22 패키지</div>
+          </div>
+          <div class="card stat">
+            <div class="etop" style="display:flex;align-items:center;gap:9px;margin-bottom:14px"><span class="ebadge prd">PRD</span><span class="conn-dot" style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)"><i style="width:7px;height:7px;border-radius:50%;background:var(--pass);box-shadow:0 0 0 3px var(--pass-bg)"></i>정상</span></div>
+            <div class="turl mono" style="font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">soil-prd.integrationsuite.cfapps…</div>
+            <div class="loc mono" style="margin-top:10px;font-size:11.5px">CF · 20 패키지</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>테넌트 등록 · 편집</h3><span class="sub">QAS 환경</span></div>
+          <div class="card-body">
+            <div class="grid g-2e" style="gap:16px">
+              <div class="field"><label>환경</label><select><option>QAS</option><option>DEV</option><option>PRD</option></select></div>
+              <div class="field"><label>유형</label><select><option>Cloud Foundry</option><option>Edge Integration Cell</option></select></div>
+            </div>
+            <div class="field"><label>OData API URL</label><input class="mono" type="text" value="https://soil-qas.integrationsuite.cfapps.eu10.hana.ondemand.com/api/v1" /></div>
+            <div class="grid g-2e" style="gap:16px">
+              <div class="field"><label>Client ID</label><input class="mono" type="text" value="sb-soil-qas-a1b2…" /></div>
+              <div class="field"><label>Client Secret</label><input class="mono" type="text" value="••••••••••••" /></div>
+            </div>
+            <div class="field"><label>Token URL</label><input class="mono" type="text" value="https://soil.authentication.eu10.hana.ondemand.com/oauth/token" /><div class="hint">Client Credentials · 자격증명은 암호화 저장됩니다.</div></div>
+            <!-- reserved status slot: buttons never shift -->
+            <div class="status-slot" id="connSlot"></div>
+            <div class="actions-bar">
+              <button class="btn" id="testConn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>연결 테스트</button>
+              <span class="spacer"></span>
+              <button class="btn primary">테넌트 저장</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 적용 규칙 (project) ===== -->
+      <section class="screen" id="rulesets">
+        <div class="page-h">
+          <div><h1>적용 규칙</h1><div class="sub" id="pjrSummary">이 프로젝트가 사용하는 전역·프로젝트 규칙 · 사용 여부는 여기서 켜고 끕니다</div></div>
+          <div class="acts"><button class="btn primary" data-go="library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>프로젝트 규칙 만들기</button></div>
+        </div>
+
+        <div class="info-note" style="align-items:flex-start;margin-bottom:18px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <span>규칙셋(묶음) 개념은 없습니다. <b>전역 규칙</b>과 <b>프로젝트 규칙</b> 각각을 이 프로젝트에서 사용할지 개별적으로 선택합니다. 전역 값을 다르게 쓰고 싶으면 전역 규칙을 끄고, 원하는 값으로 프로젝트 규칙을 새로 만들어 켜면 됩니다 — 전역 원본은 바뀌지 않습니다.</span>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <h3>적용 규칙 현황</h3>
+            <span class="sub" id="ap2Summary">전역 4 · 프로젝트 3</span>
+          </div>
+          <div class="ap-head">
+            <span>규칙</span><span>범위</span><span>이 프로젝트 적용 내용</span><span style="text-align:center">사용</span><span></span>
+          </div>
+          <div class="list-sep" id="apList">
+            <div class="ap-row" data-rule-en="true">
+              <div class="ap-name"><span class="m">sender-naming</span></div>
+              <div><span class="pill indigo plain" style="font-size:10.5px">프로젝트 규칙</span></div>
+              <div class="loc">접두사에 <span class="mono">SOIL_</span> 추가 · 전역 원본(OP_/B2B_/CP_)은 꺼짐</div>
+              <div style="display:flex;justify-content:center"><label class="switch"><input type="checkbox" checked class="pjr-en"><span class="slider"></span></label></div>
+              <div style="text-align:right"><button class="btn sm ghost" data-edit="sender-naming" data-scope="project">편집</button></div>
+            </div>
+            <div class="ap-row" data-rule-en="true">
+              <div class="ap-name"><span class="m">required-logging</span></div>
+              <div><span class="pill indigo plain" style="font-size:10.5px">프로젝트 규칙</span></div>
+              <div class="loc">심각도 warn (전역 fail 대신 이 프로젝트 전용 값 사용)</div>
+              <div style="display:flex;justify-content:center"><label class="switch"><input type="checkbox" checked class="pjr-en"><span class="slider"></span></label></div>
+              <div style="text-align:right"><button class="btn sm ghost" data-edit="required-logging" data-scope="project">편집</button></div>
+            </div>
+            <div class="ap-row" data-rule-en="true">
+              <div class="ap-name"><span class="m">soil-system-code-whitelist</span></div>
+              <div><span class="pill pass plain" style="font-size:10.5px">프로젝트 규칙</span></div>
+              <div class="loc">전역에 없음 · SOIL_ERP, SOIL_MES 시스템 코드만 허용</div>
+              <div style="display:flex;justify-content:center"><label class="switch"><input type="checkbox" checked class="pjr-en"><span class="slider"></span></label></div>
+              <div style="text-align:right"><button class="btn sm ghost" data-edit="soil-system-code-whitelist" data-scope="project">편집</button></div>
+            </div>
+            <div class="ap-row" data-rule-en="true">
+              <div class="ap-name"><span class="m">mapping-step-limit</span></div>
+              <div><span class="pill pass plain" style="font-size:10.5px">프로젝트 규칙</span></div>
+              <div class="loc">사용자 정의 조건식 · 매핑 스텝 5개 초과 시 warn</div>
+              <div style="display:flex;justify-content:center"><label class="switch"><input type="checkbox" checked class="pjr-en"><span class="slider"></span></label></div>
+              <div style="text-align:right"><button class="btn sm ghost" data-edit="mapping-step-limit" data-scope="project">편집</button></div>
+            </div>
+            <div class="ap-row" data-rule-en="true">
+              <div class="ap-name"><span class="m">allowed-script-language</span></div>
+              <div><span class="pill neutral plain" style="font-size:10.5px">전역 규칙</span></div>
+              <div class="loc">Groovy만 허용 · fail</div>
+              <div style="display:flex;justify-content:center"><label class="switch"><input type="checkbox" checked class="pjr-en"><span class="slider"></span></label></div>
+              <div style="text-align:right"><button class="btn sm ghost" data-edit="allowed-script-language" data-scope="global">편집</button></div>
+            </div>
+            <div class="ap-row" data-rule-en="true">
+              <div class="ap-name"><span class="m">no-hardcoded-endpoint</span></div>
+              <div><span class="pill neutral plain" style="font-size:10.5px">전역 규칙</span></div>
+              <div class="loc">엔드포인트 외부화 필수 · fail</div>
+              <div style="display:flex;justify-content:center"><label class="switch"><input type="checkbox" checked class="pjr-en"><span class="slider"></span></label></div>
+              <div style="text-align:right"><button class="btn sm ghost" data-edit="no-hardcoded-endpoint" data-scope="global">편집</button></div>
+            </div>
+            <div class="ap-row" data-rule-en="true">
+              <div class="ap-name"><span class="m">must-have-error-handler</span></div>
+              <div><span class="pill neutral plain" style="font-size:10.5px">전역 규칙</span></div>
+              <div class="loc">예외 처리 서브프로세스 필수 · warn</div>
+              <div style="display:flex;justify-content:center"><label class="switch"><input type="checkbox" checked class="pjr-en"><span class="slider"></span></label></div>
+              <div style="text-align:right"><button class="btn sm ghost" data-edit="must-have-error-handler" data-scope="global">편집</button></div>
+            </div>
+            <div class="ap-row" data-rule-en="true">
+              <div class="ap-name"><span class="m">processdirect-pairing</span></div>
+              <div><span class="pill neutral plain" style="font-size:10.5px">전역 규칙</span></div>
+              <div class="loc">PD 송·수신 짝 검증 · warn</div>
+              <div style="display:flex;justify-content:center"><label class="switch"><input type="checkbox" checked class="pjr-en"><span class="slider"></span></label></div>
+              <div style="text-align:right"><button class="btn sm ghost" data-edit="processdirect-pairing" data-scope="global">편집</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 검사 실행 ===== -->
+      <section class="screen" id="run">
+        <div class="page-h">
+          <div><h1>검사 실행</h1><div class="sub">환경과 iFlow를 선택해 규칙 검사를 실행합니다</div></div>
+          <div class="acts"><button class="btn primary" id="runBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>검사 실행</button></div>
+        </div>
+        <div class="grid g-2">
+          <div class="card">
+            <div class="card-h"><h3>대상 선택</h3></div>
+            <div class="card-body">
+              <div class="field"><label>환경</label>
+                <div class="env-tabs" id="envTabs"><button class="mono">DEV</button><button class="mono on">QAS</button><button class="mono">PRD</button></div>
+              </div>
+              <label style="font-size:12.5px;font-weight:600;margin:6px 0 9px;display:block">iFlow (4)</label>
+              <div class="checks">
+                <label class="chk"><input type="checkbox" checked><span class="art">SOIL_OrderIF</span><span class="p2">HTTP · v3</span></label>
+                <label class="chk"><input type="checkbox" checked><span class="art">SOIL_MaterialMaster</span><span class="p2">OData · v5</span></label>
+                <label class="chk"><input type="checkbox" checked><span class="art">SOIL_InvoiceOut</span><span class="p2">SOAP · v7</span></label>
+                <label class="chk"><input type="checkbox" checked><span class="art">SOIL_ShipmentStatus</span><span class="p2">ProcessDirect · v2</span></label>
+              </div>
+              <div style="margin-top:16px"><span class="loc" style="font-size:12px">적용 규칙: <span class="mono">8개</span> 사용 중 (<a href="#" data-go="rulesets" style="color:var(--primary-600);text-decoration:none">적용 규칙 보기</a>)</span></div>
+              <!-- progress lives at the end: nothing above shifts -->
+              <div id="runProgress" style="display:none;margin-top:16px">
+                <div class="row-between" style="margin-bottom:7px"><span class="loc mono" id="runStep" style="font-size:12px">준비 중…</span><span class="loc mono" id="runPct" style="font-size:12px">0%</span></div>
+                <div class="stat bar" style="margin:0"><i id="runBar" style="width:0%;background:linear-gradient(90deg,#5666F2,#4C5DF0);transition:width .3s"></i></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h"><h3>최근 실행</h3></div>
+            <table>
+              <thead><tr><th>환경</th><th>시각</th><th style="text-align:right">판정</th></tr></thead>
+              <tbody>
+                <tr><td><span class="pill warn plain mono" style="font-size:10.5px">QAS</span></td><td class="loc mono" style="font-size:11.5px">13:20</td><td style="text-align:right"><span class="pill fail plain">보류 권고</span></td></tr>
+                <tr><td><span class="pill indigo plain mono" style="font-size:10.5px">DEV</span></td><td class="loc mono" style="font-size:11.5px">09:14</td><td style="text-align:right"><span class="pill pass plain">통과</span></td></tr>
+                <tr><td><span class="pill pass plain mono" style="font-size:10.5px">PRD</span></td><td class="loc mono" style="font-size:11.5px">3일 전</td><td style="text-align:right"><span class="pill pass plain">통과</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 리포트 ===== -->
+      <section class="screen" id="report">
+        <div class="page-h">
+          <div><h1>검사 리포트</h1><div class="sub">S-Oil IS 전환 · <span class="mono">QAS</span> · 2026-07-13 13:20 · <span class="mono">inspien-base + soil-strict</span></div></div>
+          <div class="acts">
+            <button class="btn sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Excel</button>
+            <button class="btn sm">PDF</button>
+            <button class="btn primary sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16v16H4zM9 9h6v6H9z"/></svg>이관 티켓 첨부</button>
+          </div>
+        </div>
+
+        <div class="gate" style="margin-bottom:18px">
+          <div class="gate-in">
+            <div class="verdict f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>보류 권고</div>
+            <div class="msg"><h2>필수 규칙 위반 2건이 발견되어 이관 보류를 권고합니다</h2><p>iFlow Sentinel은 이관을 자동으로 막지 않습니다 — FAIL 항목을 검토한 뒤 이관 여부는 담당자가 결정하세요. WARN은 참고용입니다.</p></div>
+            <div class="counts">
+              <div class="pass"><div class="n">12</div><div class="l">Pass</div></div>
+              <div class="warn"><div class="n">3</div><div class="l">Warn</div></div>
+              <div class="fail"><div class="n">2</div><div class="l">Fail</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>위반 상세</h3><span class="sub">Findings · 5</span>
+            <div class="hact">
+              <button class="btn sm" style="border-color:var(--fail-line);color:var(--fail)">FAIL 2</button>
+              <button class="btn sm" style="border-color:var(--warn-line);color:var(--warn)">WARN 3</button>
+            </div>
+          </div>
+          <table>
+            <thead><tr><th style="width:78px">심각도</th><th>규칙</th><th>iFlow</th><th>위치</th><th>메시지</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pill fail">FAIL</span></td><td><span class="m">no-hardcoded-endpoint</span></td><td><span class="art">SOIL_OrderIF</span></td><td><span class="loc">Receiver “SendToS4”</span></td><td>엔드포인트 주소가 하드코딩되어 있습니다. 외부화 파라미터로 관리하세요.</td></tr>
+              <tr><td><span class="pill fail">FAIL</span></td><td><span class="m">sender-naming</span></td><td><span class="art">SOIL_InvoiceOut</span></td><td><span class="loc">Sender “BillingLegacy”</span></td><td>송신 시스템 이름이 OP_/B2B_/CP_ 접두사를 따르지 않습니다.</td></tr>
+              <tr><td><span class="pill warn">WARN</span></td><td><span class="m">must-have-error-handler</span></td><td><span class="art">SOIL_OrderIF</span></td><td><span class="loc">흐름 전체</span></td><td>예외 처리 서브프로세스가 없습니다.</td></tr>
+              <tr><td><span class="pill warn">WARN</span></td><td><span class="m">required-logging</span></td><td><span class="art">SOIL_MaterialMaster</span></td><td><span class="loc">Groovy “MapMat”</span></td><td>처리 단계에 로깅 스텝이 없습니다.</td></tr>
+              <tr><td><span class="pill warn">WARN</span></td><td><span class="m">processdirect-pairing</span></td><td><span class="art">SOIL_ShipmentStatus</span></td><td><span class="loc">Receiver PD “/ship/status”</span></td><td>대응하는 Sender ProcessDirect 채널을 찾을 수 없습니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== 규칙 (global + project) ===== -->
+      <section class="screen" id="library">
+        <div class="page-h">
+          <div><h1>규칙</h1><div class="sub">전역 규칙(라이브러리)과 프로젝트 규칙을 함께 관리합니다</div></div>
+          <div class="acts"><button class="btn primary" id="saveRule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg><span id="saveLabel">규칙 저장</span></button></div>
+        </div>
+
+        <div class="grid" style="grid-template-columns:.72fr 1.28fr 1fr;gap:18px;align-items:start">
+          <!-- rule list -->
+          <div class="card">
+            <div class="card-h"><h3>규칙 목록</h3></div>
+            <div class="rl-group">
+              <div class="rl-label">전역 규칙 <span class="pill neutral plain" style="font-size:10px">라이브러리</span></div>
+              <div class="rl-item on" data-scope="global" data-id="sender-naming"><span class="m">sender-naming</span><span class="pill fail plain" style="font-size:10px">fail</span></div>
+              <div class="rl-item" data-scope="global" data-id="required-logging"><span class="m">required-logging</span><span class="pill fail plain" style="font-size:10px">fail</span></div>
+              <div class="rl-item" data-scope="global" data-id="allowed-script-language"><span class="m">allowed-script-language</span><span class="pill fail plain" style="font-size:10px">fail</span></div>
+              <div class="rl-item" data-scope="global" data-id="no-hardcoded-endpoint"><span class="m">no-hardcoded-endpoint</span><span class="pill fail plain" style="font-size:10px">fail</span></div>
+              <div class="rl-item" data-scope="global" data-id="must-have-error-handler"><span class="m">must-have-error-handler</span><span class="pill warn plain" style="font-size:10px">warn</span></div>
+              <div class="rl-item" data-scope="global" data-id="processdirect-pairing"><span class="m">processdirect-pairing</span><span class="pill warn plain" style="font-size:10px">warn</span></div>
+              <button class="rl-add" id="addGlobal"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>새 전역 규칙</button>
+            </div>
+            <div class="rl-group">
+              <div class="rl-label">프로젝트 규칙 <span class="pill indigo plain" style="font-size:10px">S-Oil IS 전환</span></div>
+              <div class="rl-item" data-scope="project" data-id="sender-naming"><span class="m">sender-naming</span><span class="pill indigo plain" style="font-size:9.5px">오버라이드</span></div>
+              <div class="rl-item" data-scope="project" data-id="required-logging"><span class="m">required-logging</span><span class="pill indigo plain" style="font-size:9.5px">오버라이드</span></div>
+              <div class="rl-item" data-scope="project" data-id="soil-system-code-whitelist"><span class="m">soil-system-code-whitelist</span><span class="pill pass plain" style="font-size:9.5px">신규</span></div>
+              <div class="rl-item" data-scope="project" data-id="mapping-step-limit"><span class="m">mapping-step-limit</span><span class="pill pass plain" style="font-size:9.5px">조건식</span></div>
+              <button class="rl-add" id="addProject"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>새 프로젝트 규칙</button>
+            </div>
+          </div>
+
+          <!-- builder -->
+          <div class="card">
+            <div class="card-h"><h3>규칙 정의</h3></div>
+            <div class="card-body">
+              <div class="field"><label>범위</label>
+                <div class="seg wide" id="scopeSeg"><button data-scope="global" class="on">전역 규칙</button><button data-scope="project">프로젝트 규칙</button></div>
+              </div>
+              <div class="field" id="baseWrap" style="display:none">
+                <label>기반</label>
+                <div class="seg wide" id="baseSeg"><button data-base="new" class="on">새 규칙</button><button data-base="override">전역 규칙 오버라이드</button></div>
+                <select id="baseRuleSelect" style="margin-top:9px;display:none">
+                  <option value="sender-naming">sender-naming</option>
+                  <option value="required-logging">required-logging</option>
+                  <option value="allowed-script-language">allowed-script-language</option>
+                  <option value="no-hardcoded-endpoint">no-hardcoded-endpoint</option>
+                  <option value="must-have-error-handler">must-have-error-handler</option>
+                  <option value="processdirect-pairing">processdirect-pairing</option>
+                </select>
+              </div>
+              <!-- reserved context banner slot — height fixed, content swaps -->
+              <div class="scope-banner" id="scopeBanner"></div>
+
+              <div class="field"><label>규칙 ID</label><input class="mono" id="f_id" type="text" value="sender-naming" /></div>
+              <div class="field"><label>규칙 타입</label>
+                <select id="f_type">
+                  <option value="naming-convention">naming-convention — 네이밍 규칙</option>
+                  <option value="required-error-handler">required-error-handler — 예외처리 필수</option>
+                  <option value="externalized-endpoint">externalized-endpoint — 엔드포인트 외부화</option>
+                  <option value="allowed-adapter-types">allowed-adapter-types — 허용 어댑터</option>
+                  <option value="required-logging">required-logging — 로깅 필수</option>
+                  <option value="allowed-script-language">allowed-script-language — 허용 스크립트</option>
+                  <option value="forbidden-configuration">forbidden-configuration — 금지 설정값</option>
+                  <option value="processdirect-pairing">processdirect-pairing — PD 짝 검증 (cross)</option>
+                  <option value="custom-expression">custom-expression — 사용자 정의 조건식</option>
+                </select>
+              </div>
+              <div class="field"><label>심각도</label>
+                <div class="seg" id="sev"><button data-sev="fail" class="on">FAIL</button><button data-sev="warn">WARN</button><button data-sev="info">INFO</button></div>
+              </div>
+              <div class="field"><label>안내 메시지</label><textarea id="f_msg" rows="2">송신 시스템 이름은 OP_/B2B_/CP_ 접두사를 사용해야 합니다.</textarea></div>
+              <!-- dynamic params LAST so fields above never move -->
+              <div id="paramZone" style="border-top:1px dashed var(--line-2);margin-top:4px;padding-top:16px">
+                <div style="font-size:11.5px;font-weight:600;color:var(--faint);letter-spacing:.04em;text-transform:uppercase;margin-bottom:12px">파라미터</div>
+                <div class="grid g-2e" style="gap:14px" id="targetWrap">
+                  <div class="field" style="margin:0"><label>대상 요소</label><select id="f_elem"><option>participant</option><option>channel</option><option>step</option></select></div>
+                  <div class="field" style="margin:0"><label>역할</label><select id="f_role"><option>sender</option><option>receiver</option><option>any</option></select></div>
+                </div>
+                <div class="field" id="prefixWrap" style="margin-top:14px;margin-bottom:0"><label>허용 접두사</label>
+                  <div class="tags" id="tags"><input id="tagInput" placeholder="추가 후 Enter" /></div>
+                  <div class="hint">참여자(송신) 이름이 이 접두사 중 하나로 시작해야 합니다. 프로젝트 규칙에서는 이 목록 자체를 자유롭게 바꿀 수 있습니다.</div>
+                </div>
+
+                <!-- custom-expression: visual builder + expression text + schema explorer + trial run -->
+                <div id="exprWrap" style="display:none">
+                  <div class="field" style="margin:0 0 14px"><label>입력 방식</label>
+                    <div class="seg wide" id="exprModeSeg"><button data-mode="visual" class="on">비주얼 조건 빌더</button><button data-mode="text">표현식 직접 입력</button></div>
+                  </div>
+
+                  <div id="visualBuilder">
+                    <div class="cond-row">
+                      <select id="cp_path"><option value="steps">steps</option><option value="participants">participants</option><option value="channels">channels</option></select>
+                      <select id="cp_filter"><option value="">(전체)</option><option value='s.type == "mapping"'>type == "mapping"</option><option value='s.role == "sender"'>role == "sender"</option><option value='s.type == "script"'>type == "script"</option></select>
+                      <select id="cp_agg"><option value="size">개수(count)</option><option value="list">목록(그대로)</option></select>
+                      <select id="cp_op"><option value="<=">≤</option><option value=">=">≥</option><option value="==">=</option><option value="!=">≠</option></select>
+                      <input id="cp_val" class="mono" type="text" value="5" />
+                    </div>
+                    <div class="cond-and">AND / OR 묶음은 조건을 추가하면 여기 표시됩니다</div>
+                  </div>
+
+                  <div id="exprTextWrap" style="display:none;margin-top:2px">
+                    <textarea id="f_expr" class="mono" rows="3" style="font-size:12.5px">steps.filter(s, s.type == "mapping").size() <= 5</textarea>
+                    <div class="hint">파싱 모델에 대한 읽기 전용 조건식입니다. 참/거짓이 아니라 위반 요소 목록을 반환하도록 작성하면 위치 정보가 리포트에 표시됩니다.</div>
+                  </div>
+
+                  <div class="field" style="margin-top:16px">
+                    <label>스키마 탐색기 <span style="font-weight:400;color:var(--faint)">— 클릭하면 표현식에 삽입됩니다</span></label>
+                    <div class="schema-chips">
+                      <button type="button" class="chip" data-insert="participants">participants</button>
+                      <button type="button" class="chip" data-insert="channels">channels</button>
+                      <button type="button" class="chip" data-insert="steps">steps</button>
+                      <button type="button" class="chip" data-insert='.filter(s, s.type == "mapping")'>filter(type=mapping)</button>
+                      <button type="button" class="chip" data-insert=".size()">size()</button>
+                    </div>
+                  </div>
+
+                  <div class="status-slot" id="trialSlot"></div>
+                  <div class="actions-bar">
+                    <button type="button" class="btn sm" id="trialRunBtn"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>시험 실행</button>
+                    <span class="loc" style="font-size:11.5px;color:var(--faint)">샘플: SOIL_OrderIF</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- yaml -->
+          <div class="yaml">
+            <div class="yaml-h"><span class="lights"><i style="background:#E0605C"></i><i style="background:#E8C15A"></i><i style="background:#6FBE7A"></i></span><span class="fn" id="yamlFn">rules/global/sender-naming.yaml</span><span class="live">live</span></div>
+            <pre class="code" id="yamlOut"></pre>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg><span id="toastMsg">저장되었습니다</span></div>
+
+<script>
+  const crumbMap={overview:'개요',landscape:'랜드스케이프',rulesets:'적용 규칙',run:'검사 실행',report:'검사 리포트',library:'규칙'};
+  const nav=document.getElementById('nav');
+  function show(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));
+    nav.querySelectorAll('a').forEach(a=>a.classList.toggle('active',a.dataset.s===id));
+    document.getElementById('cbScreen').textContent=crumbMap[id]||id;
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+  nav.addEventListener('click',e=>{const a=e.target.closest('a');if(a){e.preventDefault();show(a.dataset.s);}});
+  document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',e=>{ e.preventDefault(); show(b.dataset.go); }));
+
+  function toast(msg){const t=document.getElementById('toast');document.getElementById('toastMsg').textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
+
+  /* project switcher */
+  const swBtn=document.getElementById('swBtn'),swMenu=document.getElementById('swMenu');
+  swBtn.addEventListener('click',e=>{e.stopPropagation();swMenu.classList.toggle('open');});
+  document.addEventListener('click',()=>swMenu.classList.remove('open'));
+  swMenu.addEventListener('click',e=>{const it=e.target.closest('.sw-item');if(!it)return;
+    const name=it.dataset.pj,ini=it.dataset.i,g=it.dataset.g;
+    document.getElementById('swName').textContent=name;
+    document.getElementById('cbPj').textContent=name;
+    const pj=document.getElementById('swPj');pj.textContent=ini;pj.style.background=`linear-gradient(140deg,${g.split(',')[0]},${g.split(',')[1]})`;
+    swMenu.querySelectorAll('.ck').forEach(c=>c.remove());
+    const ck=document.createElement('span');ck.className='ck';ck.innerHTML='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>';it.appendChild(ck);
+    toast(name+' 프로젝트로 전환했습니다');
+  });
+
+  /* connection test — result in reserved slot, buttons never move */
+  document.getElementById('testConn').addEventListener('click',function(){
+    const slot=document.getElementById('connSlot');slot.innerHTML='<span class="loc mono" style="font-size:12px">확인 중…</span>';this.disabled=true;
+    setTimeout(()=>{slot.innerHTML='<span class="pill pass">OAuth2 인증 성공 · 22 패키지 조회됨</span>';this.disabled=false;},900);
+  });
+
+  /* run simulation */
+  document.getElementById('runBtn').addEventListener('click',function(){
+    const box=document.getElementById('runProgress'),bar=document.getElementById('runBar'),pct=document.getElementById('runPct'),step=document.getElementById('runStep');
+    box.style.display='block';this.disabled=true;
+    const steps=[[15,'아티팩트 다운로드 중…'],[45,'.iflw 파싱 중…'],[70,'규칙 적용 중…'],[92,'cross-artifact 검사…'],[100,'완료']];
+    let i=0;const tick=()=>{if(i>=steps.length){this.disabled=false;toast('검사 완료 · 리포트로 이동');setTimeout(()=>show('report'),450);return;}
+      const[p,l]=steps[i++];bar.style.width=p+'%';pct.textContent=p+'%';step.textContent=l;setTimeout(tick,520);};tick();
+  });
+
+  /* env tabs (run screen) */
+  document.getElementById('envTabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    document.querySelectorAll('#envTabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');});
+
+  /* ================= 규칙 데이터 모델 ================= */
+  const GLOBAL_RULES = {
+    'sender-naming': {type:'naming-convention', severity:'fail', elem:'participant', role:'sender', prefix:['OP_','B2B_','CP_'], msg:'송신 시스템 이름은 OP_/B2B_/CP_ 접두사를 사용해야 합니다.'},
+    'required-logging': {type:'required-logging', severity:'fail', msg:'처리 단계에 로깅 스텝이 없습니다.'},
+    'allowed-script-language': {type:'allowed-script-language', severity:'fail', msg:'허용된 스크립트 언어(Groovy)만 사용해야 합니다.'},
+    'no-hardcoded-endpoint': {type:'externalized-endpoint', severity:'fail', msg:'엔드포인트 주소는 외부화 파라미터로 관리해야 합니다.'},
+    'must-have-error-handler': {type:'required-error-handler', severity:'warn', msg:'예외 처리 서브프로세스가 없습니다.'},
+    'processdirect-pairing': {type:'processdirect-pairing', severity:'warn', msg:'대응하는 Sender ProcessDirect 채널을 찾을 수 없습니다.'},
+  };
+  const PROJECT_RULES = { // S-Oil IS 전환
+    'sender-naming': {overrides:'sender-naming', type:'naming-convention', severity:'fail', elem:'participant', role:'sender', prefix:['OP_','B2B_','CP_','SOIL_'], msg:'송신 시스템 이름은 OP_/B2B_/CP_/SOIL_ 접두사를 사용해야 합니다.'},
+    'required-logging': {overrides:'required-logging', type:'required-logging', severity:'warn', msg:'처리 단계에 로깅 스텝이 없습니다. (S-Oil: 경고로 완화)'},
+    'soil-system-code-whitelist': {type:'forbidden-configuration', severity:'fail', msg:'허용되지 않은 시스템 코드입니다. SOIL_ERP, SOIL_MES만 허용됩니다.'},
+    'mapping-step-limit': {type:'custom-expression', severity:'warn', expr:'steps.filter(s, s.type == "mapping").size() <= 5', msg:'매핑 스텝이 5개를 초과했습니다.'},
+  };
+
+  let sev='fail', prefixes=['OP_','B2B_','CP_'];
+  let curScope='global', curBase='new'; // curBase: 'new' | 'override'
+
+  const $=id=>document.getElementById(id);
+  const tags=$('tags'), tagInput=$('tagInput');
+
+  function setScope(scope){
+    curScope=scope;
+    document.querySelectorAll('#scopeSeg button').forEach(b=>b.classList.toggle('on', b.dataset.scope===scope));
+    $('baseWrap').style.display = scope==='project' ? 'block' : 'none';
+    renderBanner(); toggleParamUI(); buildYaml();
+  }
+  function setBase(base){
+    curBase=base;
+    document.querySelectorAll('#baseSeg button').forEach(b=>b.classList.toggle('on', b.dataset.base===base));
+    $('baseRuleSelect').style.display = base==='override' ? 'block' : 'none';
+    const idField=$('f_id'), typeField=$('f_type');
+    if(base==='override'){
+      idField.readOnly=true; typeField.disabled=true;
+      loadFromGlobal($('baseRuleSelect').value);
+    } else {
+      idField.readOnly=false; typeField.disabled=false;
+      idField.value='soil-new-rule'; typeField.value='forbidden-configuration';
+      sev='fail'; $('f_msg').value='새 프로젝트 전용 규칙 조건을 입력하세요.';
+      document.querySelectorAll('#sev button').forEach(b=>b.classList.toggle('on', b.dataset.sev==='fail'));
+    }
+    renderBanner(); toggleParamUI(); buildYaml();
+  }
+  function loadFromGlobal(id){
+    const g=GLOBAL_RULES[id]; if(!g) return;
+    $('f_id').value=id; $('f_type').value=g.type;
+    sev=g.severity; document.querySelectorAll('#sev button').forEach(b=>b.classList.toggle('on', b.dataset.sev===g.severity));
+    $('f_msg').value=g.msg;
+    if(g.elem) $('f_elem').value=g.elem; if(g.role) $('f_role').value=g.role;
+    prefixes = g.prefix ? [...g.prefix] : ['OP_','B2B_','CP_'];
+    renderTags(false);
+  }
+  function loadRule(scope,id){
+    document.querySelectorAll('.rl-item').forEach(it=>it.classList.toggle('on', it.dataset.scope===scope && it.dataset.id===id));
+    if(scope==='global'){
+      setScope('global');
+      const g=GLOBAL_RULES[id]; if(!g) return;
+      $('f_id').readOnly=false; $('f_type').disabled=false;
+      $('f_id').value=id; $('f_type').value=g.type;
+      sev=g.severity; document.querySelectorAll('#sev button').forEach(b=>b.classList.toggle('on', b.dataset.sev===g.severity));
+      $('f_msg').value=g.msg;
+      if(g.elem) $('f_elem').value=g.elem; if(g.role) $('f_role').value=g.role;
+      prefixes = g.prefix ? [...g.prefix] : ['OP_','B2B_','CP_'];
+      renderTags(false); toggleParamUI(); buildYaml();
+    } else {
+      setScope('project');
+      const p=PROJECT_RULES[id]; if(!p) return;
+      if(p.overrides){
+        $('baseRuleSelect').value=p.overrides; setBase('override');
+        $('f_id').value=id; $('f_type').value=p.type;
+        sev=p.severity; document.querySelectorAll('#sev button').forEach(b=>b.classList.toggle('on', b.dataset.sev===p.severity));
+        $('f_msg').value=p.msg;
+        if(p.elem) $('f_elem').value=p.elem; if(p.role) $('f_role').value=p.role;
+        prefixes = p.prefix ? [...p.prefix] : ['OP_','B2B_','CP_'];
+        renderTags(false); toggleParamUI(); buildYaml();
+      } else {
+        setBase('new');
+        $('f_id').readOnly=false; $('f_type').disabled=false;
+        $('f_id').value=id; $('f_type').value=p.type;
+        sev=p.severity; document.querySelectorAll('#sev button').forEach(b=>b.classList.toggle('on', b.dataset.sev===p.severity));
+        $('f_msg').value=p.msg;
+        if(p.type==='custom-expression' && p.expr){
+          $('f_expr').value=p.expr;
+          document.querySelectorAll('#exprModeSeg button').forEach(b=>b.classList.toggle('on', b.dataset.mode==='text'));
+          $('visualBuilder').style.display='none'; $('exprTextWrap').style.display='block';
+        }
+        toggleParamUI(); buildYaml();
+      }
+    }
+  }
+  function renderBanner(){
+    const b=$('scopeBanner');
+    if(curScope==='global'){
+      b.innerHTML='';
+    } else if(curBase==='override'){
+      const base=$('baseRuleSelect').value;
+      b.innerHTML=`<div class="info-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg><span>전역 규칙 <b class="mono">${base}</b>을(를) <b>S-Oil IS 전환</b> 프로젝트에서만 재정의합니다. 규칙 ID·타입은 전역과 동일하게 유지되고, 파라미터·심각도·메시지는 이 프로젝트에서 자유롭게 바꿀 수 있습니다. 라이브러리 원본은 바뀌지 않습니다.</span></div>`;
+    } else {
+      b.innerHTML=`<div class="info-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg><span>전역 라이브러리에 없는 <b>S-Oil IS 전환</b> 프로젝트 전용 규칙입니다. 다른 프로젝트에는 적용되지 않습니다.</span></div>`;
+    }
+  }
+
+  function paramLines(type){
+    if(type==='naming-convention'){
+      const el=$('f_elem').value, ro=$('f_role').value;
+      const arr=prefixes.map(p=>`<span class="s">"${p}"</span>`).join(', ');
+      return [`      <span class="k">target</span>: { <span class="k">element</span>: <span class="s">${el}</span>, <span class="k">role</span>: <span class="s">${ro}</span> }`,
+              `      <span class="k">params</span>:`,
+              `        <span class="k">prefix</span>: [${arr}]`];
+    }
+    if(type==='externalized-endpoint') return [`      <span class="k">target</span>: { <span class="k">adapter</span>: [<span class="s">HTTP</span>, <span class="s">SOAP</span>, <span class="s">ODataV2</span>] }`];
+    if(type==='allowed-adapter-types') return [`      <span class="k">params</span>:`,`        <span class="k">allowed</span>: [<span class="s">HTTP</span>, <span class="s">SOAP</span>, <span class="s">ODataV2</span>, <span class="s">SFTP</span>]`];
+    if(type==='allowed-script-language') return [`      <span class="k">params</span>:`,`        <span class="k">allowed</span>: [<span class="s">Groovy</span>]`];
+    if(type==='required-logging') return [`      <span class="k">params</span>:`,`        <span class="k">minSteps</span>: <span class="n">1</span>`];
+    if(type==='forbidden-configuration') return [`      <span class="k">params</span>:`,`        <span class="k">allowedSystemCodes</span>: [<span class="s">SOIL_ERP</span>, <span class="s">SOIL_MES</span>]`];
+    if(type==='custom-expression') return [`      <span class="k">params</span>:`,`        <span class="k">schemaVersion</span>: <span class="n">1</span>`,`        <span class="k">expression</span>: <span class="s">${escapeHtml(getExpressionValue())}</span>`];
+    return [];
+  }
+  function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function getExpressionValue(){
+    const textMode = $('exprModeSeg') && $('exprModeSeg').querySelector('button[data-mode="text"]').classList.contains('on');
+    if(textMode) return $('f_expr').value;
+    const path=$('cp_path').value, filter=$('cp_filter').value, agg=$('cp_agg').value, op=$('cp_op').value, val=$('cp_val').value;
+    let expr=path;
+    if(filter) expr += `.filter(s, ${filter})`;
+    if(agg==='size') expr += '.size()';
+    return `${expr} ${op} ${val}`;
+  }
+  function buildYaml(){
+    const id=$('f_id').value||'rule-id', type=$('f_type').value, msg=$('f_msg').value;
+    let lines;
+    if(curScope==='global'){
+      $('yamlFn').textContent='rules/global/'+id+'.yaml';
+      $('saveLabel').textContent='전역 규칙 저장';
+      lines=[
+        `<span class="k">rule</span>:`,
+        `  <span class="k">ruleKey</span>: <span class="s">${id}</span>`,
+        `  <span class="k">isGlobal</span>: <span class="p">true</span>`,
+        `  <span class="k">type</span>: <span class="p">${type}</span>`,
+        `  <span class="k">severity</span>: <span class="p">${sev}</span>`,
+        ...paramLines(type).map(l=>l.replace(/^      /,'  ')),
+        `  <span class="k">message</span>: <span class="s">"${msg}"</span>`,
+      ];
+    } else {
+      $('yamlFn').textContent='rules/project/soil-is-migration/'+id+'.yaml';
+      $('saveLabel').textContent='프로젝트 규칙 저장';
+      lines=[
+        `<span class="k">rule</span>:`,
+        `  <span class="k">ruleKey</span>: <span class="s">${id}</span>`,
+        `  <span class="k">isGlobal</span>: <span class="p">false</span>`,
+        `  <span class="k">customProject</span>: <span class="s">soil-is-migration</span>`,
+        curBase==='override'
+          ? `  <span class="k">overrides</span>: <span class="p">global:${$('baseRuleSelect').value}</span>   <span class="c"># 전역 규칙 재정의, ID·타입 유지</span>`
+          : `  <span class="k">type</span>: <span class="p">${type}</span>   <span class="c"># 전역에 없는 신규 규칙</span>`,
+        `  <span class="k">severity</span>: <span class="p">${sev}</span>`,
+        ...paramLines(type).map(l=>l.replace(/^      /,'  ')),
+        `  <span class="k">message</span>: <span class="s">"${msg}"</span>`,
+      ];
+    }
+    $('yamlOut').innerHTML=lines.join('\n');
+  }
+  function toggleParamUI(){
+    const type=$('f_type').value;
+    const named=(type==='naming-convention');
+    const isExpr=(type==='custom-expression');
+    $('targetWrap').style.display=named?'grid':'none';
+    $('prefixWrap').style.display=named?'block':'none';
+    $('exprWrap').style.display=isExpr?'block':'none';
+  }
+  function renderTags(rebuild){
+    tags.querySelectorAll('.tag').forEach(t=>t.remove());
+    prefixes.forEach(p=>{const s=document.createElement('span');s.className='tag';s.innerHTML=`${p}<button data-t="${p}">×</button>`;tags.insertBefore(s,tagInput);});
+    if(rebuild!==false) buildYaml();
+  }
+
+  ['f_id','f_type','f_elem','f_role','f_msg'].forEach(id=>{ $(id).addEventListener('input',()=>{toggleParamUI();buildYaml();}); $(id).addEventListener('change',()=>{toggleParamUI();buildYaml();}); });
+  $('sev').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    document.querySelectorAll('#sev button').forEach(x=>x.classList.remove('on'));b.classList.add('on');sev=b.dataset.sev;buildYaml();});
+  tags.addEventListener('click',e=>{const b=e.target.closest('button[data-t]');if(b){prefixes=prefixes.filter(x=>x!==b.dataset.t);renderTags();}});
+  tagInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&tagInput.value.trim()){e.preventDefault();prefixes.push(tagInput.value.trim());tagInput.value='';renderTags();}});
+
+  $('scopeSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(b) setScope(b.dataset.scope);});
+  $('baseSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(b) setBase(b.dataset.base);});
+  $('baseRuleSelect').addEventListener('change',e=>{ loadFromGlobal(e.target.value); renderBanner(); toggleParamUI(); buildYaml(); });
+
+  /* ---- custom-expression: visual builder / text mode / schema explorer / trial run ---- */
+  $('exprModeSeg').addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    const toText = b.dataset.mode==='text';
+    if(toText){ $('f_expr').value = getExpressionValue(); } // one-way sync: visual → text
+    document.querySelectorAll('#exprModeSeg button').forEach(x=>x.classList.toggle('on', x===b));
+    $('visualBuilder').style.display = toText ? 'none' : 'block';
+    $('exprTextWrap').style.display = toText ? 'block' : 'none';
+    buildYaml();
+  });
+  ['cp_path','cp_filter','cp_agg','cp_op','cp_val'].forEach(id=>$(id).addEventListener('input', buildYaml));
+  ['cp_path','cp_filter','cp_agg','cp_op'].forEach(id=>$(id).addEventListener('change', buildYaml));
+  $('f_expr').addEventListener('input', buildYaml);
+  document.querySelectorAll('.schema-chips .chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('#exprModeSeg button').forEach(x=>x.classList.toggle('on', x.dataset.mode==='text'));
+      $('visualBuilder').style.display='none'; $('exprTextWrap').style.display='block';
+      $('f_expr').value = ($('f_expr').value || '') + chip.dataset.insert;
+      $('f_expr').focus();
+      buildYaml();
+    });
+  });
+  $('trialRunBtn').addEventListener('click', function(){
+    const slot=$('trialSlot'); slot.innerHTML='<span class="loc mono" style="font-size:12px">샘플 iFlow에 대해 조건식 평가 중…</span>'; this.disabled=true;
+    setTimeout(()=>{ slot.innerHTML='<span class="pill warn">SOIL_OrderIF에서 1건 발견 · 매핑 스텝 7개 (기준 5개 초과)</span>'; this.disabled=false; }, 900);
+  });
+
+  /* ---- 적용 규칙 screen: inline enable/disable (PJR-003/004) ---- */
+  const apList = document.getElementById('apList');
+  function refreshApplied(){
+    const rows=document.querySelectorAll('#apList .ap-row');
+    let on=0, globalOn=0, projectOn=0;
+    rows.forEach(row=>{
+      const checked=row.querySelector('.pjr-en').checked;
+      row.classList.toggle('pjr-off', !checked);
+      if(checked){
+        on++;
+        const scopeTxt=row.querySelector('.pill').textContent;
+        if(scopeTxt.includes('전역')) globalOn++; else projectOn++;
+      }
+    });
+    const s1=document.getElementById('ap2Summary'); if(s1) s1.textContent=`전역 ${globalOn} · 프로젝트 ${projectOn}`;
+    const s2=document.getElementById('pjrSummary'); if(s2) s2.textContent=`이 프로젝트가 사용하는 규칙 ${on}개 (전역 ${globalOn} · 프로젝트 ${projectOn})`;
+  }
+  if(apList){
+    apList.addEventListener('change', e=>{ if(e.target.classList.contains('pjr-en')) refreshApplied(); });
+    refreshApplied();
+  }
+
+  document.querySelectorAll('.rl-item').forEach(it=>it.addEventListener('click',()=>loadRule(it.dataset.scope, it.dataset.id)));
+  $('addGlobal').addEventListener('click',()=>{
+    document.querySelectorAll('.rl-item').forEach(it=>it.classList.remove('on'));
+    setScope('global'); $('f_id').readOnly=false; $('f_type').disabled=false;
+    $('f_id').value='new-global-rule'; $('f_type').value='naming-convention'; sev='fail';
+    document.querySelectorAll('#sev button').forEach(b=>b.classList.toggle('on', b.dataset.sev==='fail'));
+    $('f_msg').value=''; prefixes=['OP_','B2B_','CP_']; renderTags(false); toggleParamUI(); buildYaml();
+  });
+  $('addProject').addEventListener('click',()=>{
+    document.querySelectorAll('.rl-item').forEach(it=>it.classList.remove('on'));
+    setScope('project'); setBase('new');
+  });
+  $('saveRule').addEventListener('click',()=>{
+    const msg = curScope==='global' ? '전역 규칙이 라이브러리에 저장되었습니다' :
+      (curBase==='override' ? '프로젝트 오버라이드가 저장되었습니다' : '프로젝트 전용 규칙이 저장되었습니다');
+    toast(msg);
+  });
+
+  setScope('global'); toggleParamUI(); renderTags(false); buildYaml();
+
+  /* 적용 규칙 screen "편집" → jump to 규칙 화면 with correct rule loaded */
+  document.querySelectorAll('[data-edit]').forEach(btn=>{
+    btn.addEventListener('click',()=>{ show('library'); loadRule(btn.dataset.scope, btn.dataset.edit); });
+  });
+</script>
+</body>
+</html>
