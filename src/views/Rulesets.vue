@@ -1,31 +1,20 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { Info, Library } from 'lucide-vue-next';
+import { apiService } from '../services/api';
+import type { AppRule } from '../services/db';
 
 const router = useRouter();
 
-interface LocalRule {
-  id: string;
-  name: string;
-  scope: '전역 규칙' | '프로젝트 규칙';
-  scopeType: 'global' | 'project';
-  description: string;
-  enabled: boolean;
-  statusText: string;
-  statusClass: string;
-}
+const rules = ref<AppRule[]>([]);
+const isLoading = ref(true);
 
-const rules = ref<LocalRule[]>([
-  { id: '1', name: 'sender-naming', scope: '프로젝트 규칙', scopeType: 'project', description: '접두사에 SOIL_ 추가 · 전역 원본(OP_/B2B_/CP_)은 꺼짐', enabled: true, statusText: '프로젝트 규칙', statusClass: 'border-[#D5DAFB] bg-primary-tint text-primary-600' },
-  { id: '2', name: 'required-logging', scope: '프로젝트 규칙', scopeType: 'project', description: '심각도 warn (전역 fail 대신 이 프로젝트 전용 값 사용)', enabled: true, statusText: '프로젝트 규칙', statusClass: 'border-[#D5DAFB] bg-primary-tint text-primary-600' },
-  { id: '3', name: 'soil-system-code-whitelist', scope: '프로젝트 규칙', scopeType: 'project', description: '전역에 없음 · SOIL_ERP, SOIL_MES 시스템 코드만 허용', enabled: true, statusText: '프로젝트 규칙', statusClass: 'border-pass-line bg-pass-bg text-pass' },
-  { id: '4', name: 'mapping-step-limit', scope: '프로젝트 규칙', scopeType: 'project', description: '사용자 정의 조건식 · 매핑 스텝 5개 초과 시 warn', enabled: true, statusText: '프로젝트 규칙', statusClass: 'border-pass-line bg-pass-bg text-pass' },
-  { id: '5', name: 'allowed-script-language', scope: '전역 규칙', scopeType: 'global', description: 'Groovy만 허용 · fail', enabled: true, statusText: '전역 규칙', statusClass: 'border-line-2 bg-surface-2 text-muted' },
-  { id: '6', name: 'no-hardcoded-endpoint', scope: '전역 규칙', scopeType: 'global', description: '엔드포인트 외부화 필수 · fail', enabled: true, statusText: '전역 규칙', statusClass: 'border-line-2 bg-surface-2 text-muted' },
-  { id: '7', name: 'must-have-error-handler', scope: '전역 규칙', scopeType: 'global', description: '예외 처리 서브프로세스 필수 · warn', enabled: true, statusText: '전역 규칙', statusClass: 'border-line-2 bg-surface-2 text-muted' },
-  { id: '8', name: 'processdirect-pairing', scope: '전역 규칙', scopeType: 'global', description: 'PD 송·수신 짝 검증 · warn', enabled: false, statusText: '전역 규칙', statusClass: 'border-line-2 bg-surface-2 text-muted' },
-]);
+onMounted(async () => {
+  isLoading.value = true;
+  rules.value = await apiService.getRules();
+  isLoading.value = false;
+});
 
 const globalOnCount = computed(() => rules.value.filter(r => r.scopeType === 'global' && r.enabled).length);
 const projectOnCount = computed(() => rules.value.filter(r => r.scopeType === 'project' && r.enabled).length);

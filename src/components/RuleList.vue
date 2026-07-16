@@ -1,16 +1,34 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { Plus } from 'lucide-vue-next';
+import type { AppRule } from '../services/db';
 
-defineProps<{
+const props = defineProps<{
   mode: string;
   currentRuleId: string;
   scope: string;
+  rules?: AppRule[];
 }>();
 
 const emit = defineEmits<{
   (e: 'create', scope: string): void;
   (e: 'edit', id: string, isGlobal: boolean): void;
 }>();
+
+const globalRules = computed(() => props.rules?.filter(r => r.scopeType === 'global') || []);
+const projectRules = computed(() => props.rules?.filter(r => r.scopeType === 'project') || []);
+
+const getSeverityClass = (severity: string, ruleType: string) => {
+  if (ruleType === 'custom-expression' && (severity === 'info' || severity === 'warn')) return 'bg-pass-bg border border-pass-line text-pass font-bold';
+  if (severity === 'fail') return 'bg-fail text-white';
+  if (severity === 'warn') return 'bg-warn text-white';
+  return 'bg-surface-2 text-muted';
+};
+
+const getSeverityText = (rule: AppRule) => {
+  if (rule.ruleType === 'custom-expression' && (rule.severity === 'info' || rule.severity === 'warn')) return '조건식';
+  return rule.severity.toUpperCase();
+};
 </script>
 
 <template>
@@ -27,25 +45,12 @@ const emit = defineEmits<{
         </div>
         <div class="flex flex-col gap-1">
           <div 
-            @click="emit('edit', 'sender-naming', true)"
-            :class="['flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 transition', (mode === 'edit' && currentRuleId === 'sender-naming' && scope === 'global') ? 'bg-line-2' : 'bg-surface-2 hover:bg-line-2']"
+            v-for="rule in globalRules" :key="rule.id"
+            @click="emit('edit', rule.name, true)"
+            :class="['flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 transition', (mode === 'edit' && currentRuleId === rule.name && scope === 'global') ? 'bg-line-2' : 'hover:bg-surface-2']"
           >
-            <span class="font-mono text-[12.5px] font-semibold text-primary-600">sender-naming</span>
-            <span class="rounded-sm bg-fail px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">FAIL</span>
-          </div>
-          <div 
-            @click="emit('edit', 'required-logging', true)"
-            :class="['flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 transition', (mode === 'edit' && currentRuleId === 'required-logging' && scope === 'global') ? 'bg-line-2' : 'hover:bg-surface-2']"
-          >
-            <span class="font-mono text-[12.5px] font-semibold text-primary-600">required-logging</span>
-            <span class="rounded-sm bg-fail px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">FAIL</span>
-          </div>
-          <div 
-            @click="emit('edit', 'must-have-error', true)"
-            :class="['flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 transition', (mode === 'edit' && currentRuleId === 'must-have-error' && scope === 'global') ? 'bg-line-2' : 'hover:bg-surface-2']"
-          >
-            <span class="font-mono text-[12.5px] font-semibold text-primary-600">must-have-error</span>
-            <span class="rounded-sm bg-warn px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">WARN</span>
+            <span class="font-mono text-[12.5px] font-semibold text-primary-600 truncate mr-2">{{ rule.name }}</span>
+            <span :class="['shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold', getSeverityClass(rule.severity, rule.ruleType)]">{{ getSeverityText(rule) }}</span>
           </div>
         </div>
         <button @click="emit('create', 'global')" class="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line-2 px-3 py-1.5 text-[12px] font-semibold text-muted transition hover:bg-surface-2 hover:text-ink">
@@ -61,11 +66,12 @@ const emit = defineEmits<{
         </div>
         <div class="flex flex-col gap-1">
           <div 
-            @click="emit('edit', 'mapping-limit', false)"
-            :class="['flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 transition', (mode === 'edit' && currentRuleId === 'mapping-limit' && scope === 'project') ? 'bg-line-2' : 'hover:bg-surface-2']"
+            v-for="rule in projectRules" :key="rule.id"
+            @click="emit('edit', rule.name, false)"
+            :class="['flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 transition', (mode === 'edit' && currentRuleId === rule.name && scope === 'project') ? 'bg-line-2' : 'hover:bg-surface-2']"
           >
-            <span class="font-mono text-[12.5px] font-semibold text-primary-600 truncate mr-2">mapping-limit</span>
-            <span class="shrink-0 rounded-sm bg-pass-bg border border-pass-line px-1.5 py-0.5 font-mono text-[10px] font-bold text-pass">조건식</span>
+            <span class="font-mono text-[12.5px] font-semibold text-primary-600 truncate mr-2">{{ rule.name }}</span>
+            <span :class="['shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold', getSeverityClass(rule.severity, rule.ruleType)]">{{ getSeverityText(rule) }}</span>
           </div>
         </div>
         <button @click="emit('create', 'project')" class="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line-2 px-3 py-1.5 text-[12px] font-semibold text-muted transition hover:bg-surface-2 hover:text-ink">

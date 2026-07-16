@@ -2,6 +2,8 @@
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { Save } from 'lucide-vue-next';
+import { apiService } from '../services/api';
+import type { AppRule } from '../services/db';
 // @ts-ignore
 import YamlPreview from '../components/YamlPreview.vue';
 import RuleList from '../components/RuleList.vue';
@@ -13,6 +15,7 @@ const currentRuleId = ref('');
 const severity = ref('fail'); // 'fail' | 'warn' | 'info'
 const exprMode = ref('visual'); // 'visual' | 'text'
 
+const rules = ref<AppRule[]>([]);
 const route = useRoute();
 
 const ruleIdInput = ref('sender-naming');
@@ -35,23 +38,23 @@ const editRule = (id: string, isGlobal: boolean) => {
   currentRuleId.value = id;
   ruleIdInput.value = id;
   
-  // 더미 데이터 로딩
-  if (id === 'sender-naming') {
+  // 더미 데이터 로딩 (이제 전체 rules 목록에서 찾음)
+  const targetRule = rules.value.find(r => r.name === id);
+  if (targetRule) {
+    ruleType.value = targetRule.ruleType;
+    severity.value = targetRule.severity;
+    ruleMsg.value = targetRule.ruleMsg;
+  } else {
+    // 만약 없는 경우의 기본값 (혹은 생성 모드로 둔다면)
     ruleType.value = 'naming-convention';
     severity.value = 'fail';
-    ruleMsg.value = '송신 시스템 이름은 OP_/B2B_/CP_ 접두사를 사용해야 합니다.';
-  } else if (id === 'mapping-limit') {
-    ruleType.value = 'custom-expression';
-    severity.value = 'warn';
-    ruleMsg.value = '매핑 스텝이 5개를 초과했습니다.';
-  } else {
-    ruleType.value = 'required-logging';
-    severity.value = 'fail';
-    ruleMsg.value = '처리 단계에 로깅 스텝이 없습니다.';
+    ruleMsg.value = '';
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
+  rules.value = await apiService.getRules();
+  
   if (route.query.editId) {
     const editId = route.query.editId as string;
     const isGlobal = route.query.scope === 'global';
@@ -82,6 +85,7 @@ onMounted(() => {
           :mode="mode" 
           :currentRuleId="currentRuleId" 
           :scope="scope"
+          :rules="rules"
           @create="startCreate"
           @edit="editRule"
         />
