@@ -7,10 +7,13 @@ export interface Tenant {
   projectId: string;
   name: string;
   odataUrl: string;
+  clientId: string;
+  clientSecret: string;
+  tokenUrl: string;
   platformType: TenantPlatform;
   status: 'connected' | 'disconnected' | 'error';
   lastChecked?: string;
-  environment: 'DEV' | 'QAS' | 'PRD';
+  tenantName: string;
   packageCount?: number;
 }
 
@@ -35,7 +38,7 @@ export interface ProjectRule {
 export interface CheckRun {
   id: string;
   projectId: string;
-  environment: 'DEV' | 'QAS' | 'PRD';
+  tenantName: string;
   startedAt: string;
   status: 'RUNNING' | 'COMPLETED' | 'FAILED';
   summary: {

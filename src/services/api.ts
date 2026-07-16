@@ -3,15 +3,15 @@ import type { CheckRun, Finding, Tenant } from '../types';
 // 더미 데이터: 나중에 실제 API 통신 로직(fetch/axios)으로 대체됩니다.
 
 const MOCK_TENANTS: Tenant[] = [
-  { id: 't1', projectId: 'p1', name: 'DEV', environment: 'DEV', odataUrl: 'soil-dev.integrationsuite.cfapps...', platformType: 'CLOUD_FOUNDRY', status: 'connected', lastChecked: '최근 09:14', packageCount: 22 },
-  { id: 't2', projectId: 'p1', name: 'QAS', environment: 'QAS', odataUrl: 'soil-qas.integrationsuite.cfapps...', platformType: 'CLOUD_FOUNDRY', status: 'error', lastChecked: '최근 13:20', packageCount: 22 },
-  { id: 't3', projectId: 'p1', name: 'PRD', environment: 'PRD', odataUrl: 'soil-prd.integrationsuite.cfapps...', platformType: 'CLOUD_FOUNDRY', status: 'connected', lastChecked: '3일 전', packageCount: 20 },
+  { id: 't1', projectId: 'p1', name: 'DEV', tenantName: 'S-Oil DEV', odataUrl: 'soil-dev.integrationsuite.cfapps...', platformType: 'CLOUD_FOUNDRY', status: 'connected', lastChecked: '최근 09:14', packageCount: 22 },
+  { id: 't2', projectId: 'p1', name: 'QAS', tenantName: 'S-Oil QAS', odataUrl: 'soil-qas.integrationsuite.cfapps...', platformType: 'CLOUD_FOUNDRY', status: 'error', lastChecked: '최근 13:20', packageCount: 22 },
+  { id: 't3', projectId: 'p1', name: 'PRD', tenantName: 'S-Oil PRD', odataUrl: 'soil-prd.integrationsuite.cfapps...', platformType: 'CLOUD_FOUNDRY', status: 'connected', lastChecked: '3일 전', packageCount: 20 },
 ];
 
 const MOCK_CHECK_RUNS: CheckRun[] = [
-  { id: 'cr1', projectId: 'p1', environment: 'QAS', startedAt: '2026-07-13 13:20', status: 'COMPLETED', summary: { pass: 12, warn: 3, fail: 2 }, verdict: '보류 권고' },
-  { id: 'cr2', projectId: 'p1', environment: 'DEV', startedAt: '2026-07-13 09:14', status: 'COMPLETED', summary: { pass: 14, warn: 0, fail: 0 }, verdict: '통과' },
-  { id: 'cr3', projectId: 'p1', environment: 'PRD', startedAt: '2026-07-10 16:02', status: 'COMPLETED', summary: { pass: 14, warn: 0, fail: 0 }, verdict: '통과' },
+  { id: 'cr1', projectId: 'p1', tenantName: 'S-Oil DEV', startedAt: '2026-07-13 13:20', status: 'COMPLETED', summary: { pass: 12, warn: 3, fail: 2 }, verdict: '보류 권고' },
+  { id: 'cr2', projectId: 'p1', tenantName: 'S-Oil QAS', startedAt: '2026-07-13 09:14', status: 'COMPLETED', summary: { pass: 14, warn: 0, fail: 0 }, verdict: '통과' },
+  { id: 'cr3', projectId: 'p1', tenantName: 'S-Oil PRD', startedAt: '2026-07-10 16:02', status: 'COMPLETED', summary: { pass: 14, warn: 0, fail: 0 }, verdict: '통과' },
 ];
 
 const MOCK_FINDINGS: Finding[] = [
