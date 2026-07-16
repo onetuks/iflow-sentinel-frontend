@@ -38,8 +38,16 @@ const setExprMode = (val: string) => exprMode.value = val;
           <label class="mb-1.5 block text-[12.5px] font-semibold text-[#3B4257]">규칙 타입</label>
           <select v-model="ruleType" class="w-full appearance-none rounded-[11px] border border-line-2 bg-surface px-3 py-2.5 font-mono text-[12.5px] text-ink transition focus:border-primary focus:outline-none focus:ring-[3px] focus:ring-primary/15" style="background-image: url('data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236C7385\' stroke-width=\'2.2\'><path d=\'M6 9l6 6 6-6\'/></svg>'); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;">
             <option value="naming-convention">naming-convention</option>
-            <option value="custom-expression">custom-expression</option>
+            <option value="required-error-handler">required-error-handler</option>
+            <option value="externalized-endpoint">externalized-endpoint</option>
+            <option value="allowed-adapter-types">allowed-adapter-types</option>
             <option value="required-logging">required-logging</option>
+            <option value="allowed-script-language">allowed-script-language</option>
+            <option value="mapping-type">mapping-type</option>
+            <option value="required-parameter">required-parameter</option>
+            <option value="forbidden-configuration">forbidden-configuration</option>
+            <option value="processdirect-pairing">processdirect-pairing</option>
+            <option value="custom-expression">custom-expression</option>
           </select>
         </div>
 
