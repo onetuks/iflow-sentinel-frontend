@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Plus } from 'lucide-vue-next';
 
 const scope = defineModel<string>('scope', { required: true });
 const mode = defineModel<string>('mode', { required: true });
@@ -11,6 +10,17 @@ const exprMode = defineModel<string>('exprMode', { required: true });
 
 const setSeverity = (val: string) => severity.value = val;
 const setExprMode = (val: string) => exprMode.value = val;
+
+import { ref } from 'vue';
+import ConditionNode, { type ConditionGroup } from './ConditionNode.vue';
+
+const rootGroup = ref<ConditionGroup>({
+  type: 'group',
+  logic: 'AND',
+  children: [
+    { type: 'condition', subject: 'steps', filter: 'type == "mapping"', method: 'size()', operator: '<=', value: '5' }
+  ]
+});
 </script>
 
 <template>
@@ -78,21 +88,8 @@ const setExprMode = (val: string) => exprMode.value = val;
           </div>
         </div>
 
-        <div v-if="exprMode === 'visual'" class="animate-fade rounded-xl border border-line bg-surface-2 p-4">
-          <div class="flex flex-wrap items-center gap-2">
-            <select class="rounded-lg border border-line px-2 py-1.5 font-mono text-[12px]"><option>steps</option></select>
-            <select class="rounded-lg border border-line px-2 py-1.5 font-mono text-[12px]"><option>type == "mapping"</option></select>
-            <select class="rounded-lg border border-line px-2 py-1.5 font-mono text-[12px]"><option>size()</option></select>
-            <select class="rounded-lg border border-line px-2 py-1.5 font-mono text-[12px]"><option><=</option></select>
-            <input type="text" value="5" class="w-16 rounded-lg border border-line px-2 py-1.5 font-mono text-[12px] text-center" />
-          </div>
-          
-          <!-- 조건 추가 버튼 추가됨 -->
-          <button class="mt-3 flex items-center gap-1.5 rounded-lg border border-line-2 bg-white px-3 py-1.5 text-[11px] font-semibold text-muted transition hover:bg-surface-2 hover:text-ink">
-            <Plus class="h-[12px] w-[12px]" /> 조건 추가
-          </button>
-          
-          <div class="mt-3 border-t border-line-2 pt-3 text-[11px] font-semibold text-faint">AND / OR 묶음은 조건을 추가하면 여기 표시됩니다</div>
+        <div v-if="exprMode === 'visual'" class="animate-fade">
+          <ConditionNode :node="rootGroup" :is-root="true" />
         </div>
         
         <div v-else class="animate-fade">
