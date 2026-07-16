@@ -106,7 +106,7 @@ const selectProject = (projectName: string) => {
         active-class="bg-primary-tint font-semibold !text-primary-600"
       >
         <Box class="h-[17px] w-[17px] opacity-80" />
-        <span>개요</span>
+        <span>대시보드</span>
       </router-link>
       
       <router-link 

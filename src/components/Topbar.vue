@@ -13,7 +13,7 @@ defineEmits<{
 
 const route = useRoute();
 const screenName = computed(() => {
-  if (route.name === 'Overview') return '개요';
+  if (route.name === 'Overview') return '대시보드';
   if (route.name === 'Landscape') return '랜드스케이프';
   if (route.name === 'Rulesets') return '적용 규칙';
   if (route.name === 'Run') return '검사 실행';
@@ -39,10 +39,10 @@ const screenName = computed(() => {
 
     <!-- 우측 도구모음 -->
     <div class="ml-auto flex items-center gap-2.5">
-      <div class="flex w-[200px] items-center gap-2 rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 text-[12.5px] text-faint">
+      <!-- <div class="flex w-[200px] items-center gap-2 rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 text-[12.5px] text-faint">
         <Search class="h-[15px] w-[15px]" />
         iFlow 검색…
-      </div>
+      </div> -->
       <button class="flex h-9 w-9 items-center justify-center rounded-[10px] border border-line-2 bg-surface text-muted transition hover:border-[#D2D6E2] hover:text-ink">
         <Bell class="h-[17px] w-[17px]" />
       </button>

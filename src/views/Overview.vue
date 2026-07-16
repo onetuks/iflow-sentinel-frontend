@@ -47,7 +47,7 @@ const getEnvBadgeClass = (env: string) => {
     <!-- 1. 페이지 헤더 (타이틀 및 액션 버튼) -->
     <div class="mb-6 flex min-h-[44px] flex-wrap items-center gap-3.5">
       <div>
-        <h1 class="m-0 font-disp text-2xl font-bold tracking-tight">개요</h1>
+        <h1 class="m-0 font-disp text-2xl font-bold tracking-tight">대시보드</h1>
         <div class="mt-1 text-[13px] text-muted">S-Oil IS 전환 · 랜드스케이프 상태와 최근 검사</div>
       </div>
       <div class="ml-auto flex shrink-0 gap-2">
@@ -172,7 +172,7 @@ const getEnvBadgeClass = (env: string) => {
               <tr v-for="run in checkRuns" :key="run.id" class="transition hover:bg-surface-2">
                 <td class="border-b border-line px-4.5 py-3 align-middle">
                   <span class="rounded-full border border-line-2 bg-surface-2 px-2.5 py-0.5 font-mono text-[10.5px] font-semibold text-muted">
-                    {{ run.environment }}
+                    {{ run.tenantName }}
                   </span>
                 </td>
                 <td class="border-b border-line px-4.5 py-3 align-middle font-mono text-[12px] text-muted">{{ run.startedAt }}</td>
