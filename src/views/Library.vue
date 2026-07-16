@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { Save } from 'lucide-vue-next';
 // @ts-ignore
 import YamlPreview from '../components/YamlPreview.vue';
@@ -11,6 +12,8 @@ const mode = ref('create'); // 'create' | 'edit'
 const currentRuleId = ref('');
 const severity = ref('fail'); // 'fail' | 'warn' | 'info'
 const exprMode = ref('visual'); // 'visual' | 'text'
+
+const route = useRoute();
 
 const ruleIdInput = ref('sender-naming');
 const ruleType = ref('naming-convention');
@@ -47,6 +50,14 @@ const editRule = (id: string, isGlobal: boolean) => {
     ruleMsg.value = '처리 단계에 로깅 스텝이 없습니다.';
   }
 };
+
+onMounted(() => {
+  if (route.query.editId) {
+    const editId = route.query.editId as string;
+    const isGlobal = route.query.scope === 'global';
+    editRule(editId, isGlobal);
+  }
+});
 </script>
 
 <template>

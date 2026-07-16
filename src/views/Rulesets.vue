@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { Info, Library } from 'lucide-vue-next';
+
+const router = useRouter();
 
 interface LocalRule {
   id: string;
@@ -35,7 +38,7 @@ const projectOnCount = computed(() => rules.value.filter(r => r.scopeType === 'p
         <h1 class="m-0 font-disp text-2xl font-bold tracking-tight">적용 규칙</h1>
         <div class="mt-1 text-[13px] text-muted">이 프로젝트가 사용하는 규칙 {{ globalOnCount + projectOnCount }}개 (전역 {{ globalOnCount }} · 프로젝트 {{ projectOnCount }})</div>
       </div>
-      <div class="ml-auto flex shrink-0 gap-2">
+      <div class="ml-auto flex shrink-0 gap-2" @click="router.push('/library')">
         <button class="flex items-center gap-1.5 whitespace-nowrap rounded-[11px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(76,93,240,0.32)] transition hover:shadow-[0_6px_20px_rgba(76,93,240,0.42)]">
           <Library class="h-[15px] w-[15px]" />
           프로젝트 규칙 만들기
@@ -91,14 +94,14 @@ const projectOnCount = computed(() => rules.value.filter(r => r.scopeType === 'p
           <div class="flex items-center justify-center lg:justify-center">
             <label class="relative inline-flex h-[22px] w-[38px] shrink-0 cursor-pointer items-center">
               <input type="checkbox" v-model="rule.enabled" class="peer sr-only" />
-              <div class="peer h-[22px] w-[38px] rounded-full bg-line-2 transition-colors peer-checked:bg-primary"></div>
+              <div class="peer h-[22px] w-[38px] rounded-full bg-[#CBD5E1] transition-colors peer-checked:bg-primary"></div>
               <div class="absolute left-[3px] top-[3px] h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4"></div>
             </label>
           </div>
           
           <!-- 5. 액션 -->
           <div class="flex justify-end lg:justify-end">
-            <button class="rounded-lg px-3 py-1.5 text-[12.5px] font-semibold text-muted transition hover:bg-surface-2 hover:text-ink">편집</button>
+            <button @click="router.push({ path: '/library', query: { editId: rule.name, scope: rule.scopeType } })" class="rounded-lg px-3 py-1.5 text-[12.5px] font-semibold text-muted transition hover:bg-surface-2 hover:text-ink">편집</button>
           </div>
         </div>
       </div>
