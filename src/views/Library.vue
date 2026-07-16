@@ -52,6 +52,43 @@ const editRule = (id: string, isGlobal: boolean) => {
   }
 };
 
+const saveRule = async () => {
+  const isGlobal = scope.value === 'global';
+  const newRule: AppRule = {
+    id: mode.value === 'create' ? ruleIdInput.value : currentRuleId.value,
+    name: ruleIdInput.value,
+    scope: isGlobal ? '전역 규칙' : '프로젝트 규칙',
+    scopeType: scope.value as 'global' | 'project',
+    description: ruleMsg.value,
+    enabled: true,
+    statusText: isGlobal ? '전역 규칙' : '프로젝트 규칙',
+    statusClass: isGlobal ? 'border-line-2 bg-surface-2 text-muted' : 'border-[#D5DAFB] bg-primary-tint text-primary-600',
+    ruleType: ruleType.value,
+    severity: severity.value as 'fail' | 'warn' | 'info',
+    ruleMsg: ruleMsg.value
+  };
+
+  if (mode.value === 'create') {
+    const response = await apiService.createRule(newRule);
+    if (response.status >= 200 && response.status < 300) {
+      alert(`[API: createRule] '${newRule.name}' 규칙이 생성되었습니다.`);
+      rules.value = await apiService.getRules();
+      mode.value = 'edit';
+      currentRuleId.value = newRule.name;
+    } else {
+      alert('규칙 생성에 실패했습니다.');
+    }
+  } else {
+    const response = await apiService.updateRule(currentRuleId.value, newRule);
+    if (response.status >= 200 && response.status < 300) {
+      alert(`[API: updateRule] '${newRule.name}' 규칙이 수정되었습니다.`);
+      rules.value = await apiService.getRules();
+    } else {
+      alert('규칙 수정에 실패했습니다.');
+    }
+  }
+};
+
 onMounted(async () => {
   rules.value = await apiService.getRules();
   
@@ -71,7 +108,7 @@ onMounted(async () => {
         <div class="mt-1 text-[13px] text-muted">전역 규칙과 프로젝트 규칙을 생성하거나 수정합니다</div>
       </div>
       <div class="ml-auto flex shrink-0 gap-2">
-        <button class="flex items-center gap-1.5 whitespace-nowrap rounded-[11px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(76,93,240,0.32)] transition hover:shadow-[0_6px_20px_rgba(76,93,240,0.42)]">
+        <button @click="saveRule" class="flex items-center gap-1.5 whitespace-nowrap rounded-[11px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(76,93,240,0.32)] transition hover:shadow-[0_6px_20px_rgba(76,93,240,0.42)]">
           <Save class="h-[15px] w-[15px]" />
           규칙 저장
         </button>

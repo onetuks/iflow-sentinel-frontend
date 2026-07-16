@@ -39,5 +39,30 @@ export const apiService = {
         resolve(MOCK_RULES);
       }, 300);
     });
+  },
+
+  // 규칙 생성
+  async createRule(rule: AppRule): Promise<{ status: number; data?: AppRule }> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        MOCK_RULES.push(rule);
+        resolve({ status: 201, data: rule });
+      }, 300);
+    });
+  },
+
+  // 규칙 수정
+  async updateRule(id: string, rule: Partial<AppRule>): Promise<{ status: number; data?: AppRule }> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const index = MOCK_RULES.findIndex(r => r.id === id);
+        if (index !== -1) {
+          MOCK_RULES[index] = { ...MOCK_RULES[index], ...rule };
+          resolve({ status: 200, data: MOCK_RULES[index] });
+        } else {
+          resolve({ status: 404 });
+        }
+      }, 300);
+    });
   }
 };
