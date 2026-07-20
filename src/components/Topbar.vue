@@ -19,6 +19,8 @@ const screenName = computed(() => {
   if (route.name === 'Run') return '검사 실행';
   if (route.name === 'Report') return '검사 리포트';
   if (route.name === 'Library') return '규칙 라이브러리';
+  if (route.name === 'ArtifactTracker') return '아티팩트 추적';
+  if (route.name === 'ParserExplorer') return '파서 탐색기';
   return '페이지';
 });
 </script>

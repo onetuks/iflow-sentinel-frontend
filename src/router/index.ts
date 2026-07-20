@@ -44,7 +44,17 @@ const router = createRouter({
       path: '/parser-explorer',
       name: 'ParserExplorer',
       component: () => import('../views/ParserExplorer.vue')
-    }
+    },
+    {
+      path: '/artifact-tracker',
+      name: 'ArtifactTracker',
+      component: () => import('../views/ArtifactTracker.vue')
+    },
+    // {
+    //   path: '/property-explorer',
+    //   name: 'PropertyExplorer',
+    //   component: () => import('../views/PropertyExplorer.vue')
+    // }
   ]
 });
 

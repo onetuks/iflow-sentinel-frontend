@@ -1,6 +1,8 @@
 import type { CheckRun, Finding, Tenant } from '../types';
-import { MOCK_TENANTS, MOCK_CHECK_RUNS, MOCK_FINDINGS, MOCK_RULES, MOCK_IFLOWS, MOCK_ARTIFACTS, MOCK_PARSED_MODEL, MOCK_PROJECTS, MOCK_RUN_STEPS } from './db';
-import type { AppRule } from './db';
+import { MOCK_TENANTS, MOCK_CHECK_RUNS, MOCK_FINDINGS, MOCK_RULES, MOCK_IFLOWS, MOCK_ARTIFACTS, MOCK_PARSED_MODEL, MOCK_PROJECTS, MOCK_RUN_STEPS, MOCK_TRACKER_ARTIFACTS } from './db';
+import type { AppRule, TrackerArtifact } from './db';
+
+export type { AppRule, TrackerArtifact };
 
 // 더미 데이터: 나중에 실제 API 통신 로직(fetch/axios)으로 대체됩니다.
 
@@ -63,6 +65,17 @@ export const apiService = {
     return new Promise((resolve) => {
       setTimeout(() => {
         resolve(MOCK_ARTIFACTS);
+      }, 300);
+    });
+  },
+
+  // 아티팩트 트래커용 데이터 조회
+  async getTrackerArtifacts(tenantName: string): Promise<TrackerArtifact[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // 실제 백엔드에서는 tenantName에 맞는 데이터를 조회합니다.
+        // 현재는 더미 데이터를 반환합니다.
+        resolve(MOCK_TRACKER_ARTIFACTS);
       }, 300);
     });
   },

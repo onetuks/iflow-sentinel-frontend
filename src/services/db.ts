@@ -278,3 +278,22 @@ export const MOCK_PARSED_MODEL: any = {
   ],
   scripts: []
 };
+
+export interface TrackerArtifact {
+  id: string;
+  package: string;
+  artifact: string;
+  runtime: string;
+  status: 'Deployed' | 'Undeployed' | 'Illusion';
+}
+
+export const MOCK_TRACKER_ARTIFACTS: TrackerArtifact[] = [
+  { id: '1', package: 'com.example.hr', artifact: 'HR_Employee_Sync', runtime: 'HR_Employee_Sync_V1', status: 'Deployed' },
+  { id: '2', package: 'com.example.hr', artifact: 'HR_Salary_Update', runtime: 'HR_Salary_Update', status: 'Undeployed' },
+  { id: '3', package: 'com.example.finance', artifact: 'FI_Invoice_Post', runtime: 'FI_Invoice_Post_DEV', status: 'Deployed' },
+  { id: '4', package: 'com.example.finance', artifact: 'FI_Master_Data', runtime: 'FI_Master_Data', status: 'Illusion' },
+  { id: '5', package: 'com.example.logistics', artifact: 'LO_Delivery_Track', runtime: 'LO_Delivery_Track_V2', status: 'Deployed' },
+  { id: '6', package: 'com.example.logistics', artifact: 'LO_Inventory_Sync', runtime: '-', status: 'Undeployed' },
+  { id: '7', package: 'com.example.sales', artifact: 'SD_Order_Create', runtime: 'SD_Order_Create_PRD', status: 'Deployed' },
+  { id: '8', package: 'com.example.sales', artifact: 'SD_Customer_Sync', runtime: 'SD_Customer_Sync_Legacy', status: 'Illusion' }
+];
