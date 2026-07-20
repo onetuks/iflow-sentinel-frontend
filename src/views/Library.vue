@@ -135,8 +135,9 @@ onMounted(async () => {
       </div>
 
       <!-- 오른쪽 폼 영역 -->
-      <div :class="['grid gap-4 transition-all duration-300', showYamlPreview ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1']">
+      <div :class="['grid gap-4 transition-all duration-300', showYamlPreview ? 'grid-cols-1 xl:grid-cols-8' : 'grid-cols-1']">
         <RuleForm 
+          :class="showYamlPreview ? 'xl:col-span-5' : 'xl:col-span-1'"
           v-model:scope="scope"
           v-model:mode="mode"
           v-model:ruleIdInput="ruleIdInput"
@@ -148,6 +149,7 @@ onMounted(async () => {
 
         <!-- YAML Preview 컴포넌트 -->
         <YamlPreview 
+          class="xl:col-span-3 min-w-0"
           v-show="showYamlPreview"
           :rule-id="ruleIdInput"
           :rule-type="ruleType"

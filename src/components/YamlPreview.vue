@@ -146,7 +146,7 @@ const yamlHtml = computed(() => yamlLines.value.join('\n'))
 </script>
 
 <template>
-  <div class="rounded-2xl overflow-hidden bg-[#171B2E] shadow-[0_8px_40px_rgba(26,30,46,0.10)]">
+  <div class="rounded-2xl h-fit overflow-hidden bg-[#171B2E] shadow-[0_8px_40px_rgba(26,30,46,0.10)]">
     <!-- header -->
     <div class="flex items-center gap-[9px] px-4 py-[13px] border-b border-white/[0.07]">
       <span class="flex gap-[7px]">
