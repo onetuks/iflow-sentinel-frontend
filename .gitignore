@@ -8,6 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 .vscode/
+references/docx_extracted/
+references/docx*
 
 node_modules
 dist
