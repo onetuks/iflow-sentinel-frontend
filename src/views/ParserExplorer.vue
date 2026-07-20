@@ -54,7 +54,7 @@ const highlightJSON = (json: object) => {
   <div class="h-full flex flex-col">
     <div class="mb-6 flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-disp font-bold text-ink">파싱 모델 탐색기 (Parser Explorer)</h1>
+        <h1 class="text-2xl font-disp font-bold text-ink">파싱 모델 탐색기</h1>
         <p class="mt-1 text-sm text-muted">Parser가 아티팩트에서 추출한 구조화된 모델을 확인하고, 조건식 작성에 활용할 수 있습니다.</p>
       </div>
     </div>
