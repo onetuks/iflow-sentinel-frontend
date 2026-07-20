@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { PlayCircle } from 'lucide-vue-next';
+import { MOCK_TENANTS, MOCK_CHECK_RUNS, MOCK_IFLOWS } from '../services/db';
+import type { Tenant, CheckRun, IFlow } from '../types';
 
 const router = useRouter();
 
@@ -9,11 +11,18 @@ const isRunning = ref(false);
 const progress = ref(0);
 const progressLabel = ref('준비 중…');
 
-const checkRuns = [
-  { env: 'QAS', time: '13:20', status: '보류 권고', pass: false },
-  { env: 'DEV', time: '09:14', status: '통과', pass: true },
-  { env: 'PRD', time: '3일 전', status: '통과', pass: true }
-];
+const tenants = ref<Tenant[]>([]);
+const checkRuns = ref<CheckRun[]>([]);
+const iflows = ref<IFlow[]>([]);
+
+onMounted(() => {
+  tenants.value = MOCK_TENANTS;
+  checkRuns.value = MOCK_CHECK_RUNS;
+  iflows.value = MOCK_IFLOWS;
+  if (tenants.value.length > 0) {
+    activeTab.value = tenants.value.find(t => t.name.includes('QAS'))?.name || tenants.value[0].name;
+  }
+});
 
 const startRun = () => {
   isRunning.value = true;
@@ -51,7 +60,7 @@ const activeTab = ref('QAS');
     <div class="mb-6 flex min-h-[44px] flex-wrap items-center gap-3.5">
       <div>
         <h1 class="m-0 font-disp text-2xl font-bold tracking-tight">검사 실행</h1>
-        <div class="mt-1 text-[13px] text-muted">환경과 iFlow를 선택해 규칙 검사를 실행합니다</div>
+        <div class="mt-1 text-[13px] text-muted">테넌트와 iFlow를 선택해 규칙 검사를 실행합니다</div>
       </div>
       <div class="ml-auto flex shrink-0 gap-2">
         <button 
@@ -72,43 +81,28 @@ const activeTab = ref('QAS');
         </div>
         <div class="p-5">
           <div class="mb-4">
-            <label class="mb-1.5 block text-[12.5px] font-semibold text-[#3B4257]">환경</label>
+            <label class="mb-1.5 block text-[12.5px] font-semibold text-[#3B4257]">테넌트</label>
             <div class="flex items-center gap-1.5">
               <button 
-                v-for="env in ['DEV', 'QAS', 'PRD']" 
-                :key="env"
-                @click="activeTab = env"
+                v-for="tenant in tenants" 
+                :key="tenant.id"
+                @click="activeTab = tenant.name"
                 :class="[
                   'rounded-[10px] px-4 py-2 font-mono text-[12.5px] font-semibold transition',
-                  activeTab === env ? 'bg-ink text-white shadow-sm' : 'bg-surface-2 text-muted hover:bg-line-2 hover:text-ink'
+                  activeTab === tenant.name ? 'bg-ink text-white shadow-sm' : 'bg-surface-2 text-muted hover:bg-line-2 hover:text-ink'
                 ]"
               >
-                {{ env }}
+                {{ tenant.name }}
               </button>
             </div>
           </div>
           
-          <label class="mb-2.5 mt-1.5 block text-[12.5px] font-semibold text-[#3B4257]">iFlow (4)</label>
+          <label class="mb-2.5 mt-1.5 block text-[12.5px] font-semibold text-[#3B4257]">iFlow ({{ iflows.length }})</label>
           <div class="flex flex-col gap-2 rounded-xl border border-line bg-surface-2 p-3">
-            <label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-white">
+            <label v-for="iflow in iflows" :key="iflow.id" class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-white">
               <input type="checkbox" checked class="h-4 w-4 rounded text-primary focus:ring-primary" />
-              <span class="font-mono text-[13px] font-semibold text-ink">SOIL_OrderIF</span>
-              <span class="ml-auto font-mono text-[11.5px] text-muted">HTTP · v3</span>
-            </label>
-            <label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-white">
-              <input type="checkbox" checked class="h-4 w-4 rounded text-primary focus:ring-primary" />
-              <span class="font-mono text-[13px] font-semibold text-ink">SOIL_MaterialMaster</span>
-              <span class="ml-auto font-mono text-[11.5px] text-muted">OData · v5</span>
-            </label>
-            <label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-white">
-              <input type="checkbox" checked class="h-4 w-4 rounded text-primary focus:ring-primary" />
-              <span class="font-mono text-[13px] font-semibold text-ink">SOIL_InvoiceOut</span>
-              <span class="ml-auto font-mono text-[11.5px] text-muted">SOAP · v7</span>
-            </label>
-            <label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-white">
-              <input type="checkbox" checked class="h-4 w-4 rounded text-primary focus:ring-primary" />
-              <span class="font-mono text-[13px] font-semibold text-ink">SOIL_ShipmentStatus</span>
-              <span class="ml-auto font-mono text-[11.5px] text-muted">ProcessDirect · v2</span>
+              <span class="font-mono text-[13px] font-semibold text-ink">{{ iflow.name }}</span>
+              <span class="ml-auto font-mono text-[11.5px] text-muted">{{ iflow.protocol }} · {{ iflow.version }}</span>
             </label>
           </div>
           
@@ -140,28 +134,28 @@ const activeTab = ref('QAS');
           <table class="w-full border-collapse">
             <thead>
               <tr>
-                <th class="border-b border-line px-4.5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-faint">환경</th>
+                <th class="border-b border-line px-4.5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-faint">테넌트</th>
                 <th class="border-b border-line px-4.5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-faint">시각</th>
                 <th class="border-b border-line px-4.5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-faint">판정</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(run, idx) in checkRuns" :key="idx" class="transition hover:bg-surface-2">
+              <tr v-for="run in checkRuns" :key="run.id" class="transition hover:bg-surface-2">
                 <td class="border-b border-line px-4.5 py-3 align-middle">
                   <span :class="[
                     'rounded-full border border-line-2 px-2.5 py-0.5 font-mono text-[10.5px] font-semibold',
-                    run.env === 'QAS' ? 'bg-warn-bg text-qas' : (run.env === 'DEV' ? 'bg-[#EEF0FE] text-dev' : 'bg-pass-bg text-prd')
+                    run.tenantName.includes('QAS') ? 'bg-warn-bg text-qas' : (run.tenantName.includes('DEV') ? 'bg-[#EEF0FE] text-dev' : 'bg-pass-bg text-prd')
                   ]">
-                    {{ run.env }}
+                    {{ run.tenantName }}
                   </span>
                 </td>
-                <td class="border-b border-line px-4.5 py-3 align-middle font-mono text-[11.5px] text-muted">{{ run.time }}</td>
+                <td class="border-b border-line px-4.5 py-3 align-middle font-mono text-[11.5px] text-muted">{{ run.startedAt.includes(' ') ? run.startedAt.split(' ')[1] : run.startedAt }}</td>
                 <td class="border-b border-line px-4.5 py-3 text-right align-middle">
                   <span :class="[
                     'rounded-full border px-2.5 py-0.5 font-mono text-[11.5px] font-semibold',
-                    run.pass ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail-line bg-fail-bg text-fail'
+                    run.verdict === '통과' ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail-line bg-fail-bg text-fail'
                   ]">
-                    {{ run.status }}
+                    {{ run.verdict }}
                   </span>
                 </td>
               </tr>

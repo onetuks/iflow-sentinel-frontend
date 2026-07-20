@@ -13,7 +13,6 @@ export interface Tenant {
   platformType: TenantPlatform;
   status: 'connected' | 'disconnected' | 'error';
   lastChecked?: string;
-  tenantName: string;
   packageCount?: number;
 }
 
@@ -58,4 +57,11 @@ export interface Finding {
   location: string;
   message: string;
   count: number;
+}
+
+export interface IFlow {
+  id: string;
+  name: string;
+  protocol: string;
+  version: string;
 }
