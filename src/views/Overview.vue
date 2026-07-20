@@ -29,10 +29,10 @@ onMounted(async () => {
 });
 
 // 환경별 배지 색상 함수
-const getEnvBadgeClass = (env: string) => {
-  if (env === 'DEV') return 'bg-[#EEF0FE] text-dev';
-  if (env === 'QAS') return 'bg-warn-bg text-qas';
-  if (env === 'PRD') return 'bg-pass-bg text-prd';
+const getEnvBadgeClass = (tenantName: string) => {
+  if (tenantName.includes('DEV')) return 'bg-[#EEF0FE] text-dev';
+  if (tenantName.includes('QAS')) return 'bg-warn-bg text-qas';
+  if (tenantName.includes('PRD')) return 'bg-pass-bg text-prd';
   return 'bg-surface-2 text-muted';
 };
 </script>
@@ -64,13 +64,16 @@ const getEnvBadgeClass = (env: string) => {
         <!-- 테넌트 박스 -->
         <div class="relative flex-1 rounded-2xl border border-line bg-surface p-4.5 shadow-md">
           <div class="mb-3 flex items-center gap-2">
-            <span :class="['rounded-md px-2 py-1 font-mono text-[11px] font-semibold tracking-wide', getEnvBadgeClass(tenant.environment)]">
-              {{ tenant.environment }}
+            <span :class="['rounded-md px-2 py-1 font-mono text-[11px] font-semibold tracking-wide', getEnvBadgeClass(tenant.tenantName)]">
+              {{ tenant.tenantName.split(' ').pop() || tenant.tenantName }}
             </span>
             <span class="ml-auto flex items-center gap-1.5 text-[11px] text-muted">
               <i :class="['h-1.5 w-1.5 rounded-full shadow-[0_0_0_3px]', tenant.status === 'connected' ? 'bg-pass shadow-pass-bg' : 'bg-fail shadow-fail-bg']"></i>
               {{ tenant.status === 'connected' ? '연결됨' : '오류' }}
             </span>
+          </div>
+          <div class="truncate font-disp text-[15px] font-semibold tracking-tight text-ink">
+            {{ tenant.tenantName }}
           </div>
           <div class="mb-3.5 truncate font-mono text-[11.5px] text-muted">{{ tenant.odataUrl }}</div>
           <div class="flex items-center justify-between">
@@ -80,10 +83,10 @@ const getEnvBadgeClass = (env: string) => {
             <small class="text-[11px] text-faint">{{ tenant.lastChecked }}</small>
           </div>
         </div>
-        <!-- 연결선 (마지막 요소 제외) -->
+        <!-- 연결선 (마지막 요소 제외)
         <div v-if="index < tenants.length - 1" class="flex w-8 shrink-0 items-center justify-center text-faint md:w-8 hidden md:flex">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-5 w-5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-        </div>
+        </div> -->
       </template>
     </div>
 

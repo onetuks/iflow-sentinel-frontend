@@ -39,6 +39,11 @@ const router = createRouter({
       path: '/library',
       name: 'Library',
       component: () => import('../views/Library.vue')
+    },
+    {
+      path: '/parser-explorer',
+      name: 'ParserExplorer',
+      component: () => import('../views/ParserExplorer.vue')
     }
   ]
 });

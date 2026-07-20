@@ -11,8 +11,11 @@ const exprMode = defineModel<string>('exprMode', { required: true });
 const setSeverity = (val: string) => severity.value = val;
 const setExprMode = (val: string) => exprMode.value = val;
 
-import { ref } from 'vue';
-import ConditionNode, { type ConditionGroup } from './ConditionNode.vue';
+import { ref, provide, nextTick, onMounted, watch } from 'vue';
+import ConditionNode, { type ConditionGroup, type ConditionItem, type ActiveFieldKey } from './ConditionNode.vue';
+import FieldPicker, { type FieldPickerArtifact } from './FieldPicker.vue';
+import { getExpressionSchema, type SchemaField, type SubjectField } from '../utils/schemaTree';
+import { apiService } from '../services/api';
 
 const rootGroup = ref<ConditionGroup>({
   type: 'group',
@@ -21,6 +24,97 @@ const rootGroup = ref<ConditionGroup>({
     { type: 'condition', subject: 'steps', filter: 'type == "mapping"', method: 'size()', operator: '<=', value: '5' }
   ]
 });
+
+// 파서 탐색기(ParserExplorer)와 동일한 API로 아티팩트/파싱 모델을 가져와 선택 가능한 필드 트리를 구성한다.
+const fieldPickerArtifacts = ref<FieldPickerArtifact[]>([]);
+const selectedFieldArtifactId = ref('');
+const fieldTree = ref<SchemaField[]>([]);
+const subjectFields = ref<SubjectField[]>([]);
+const fieldSchemaLoading = ref(false);
+
+const loadFieldSchema = async (artifactId: string) => {
+  fieldSchemaLoading.value = true;
+  try {
+    const model = await apiService.getParsedModel(artifactId);
+    const schema = getExpressionSchema(model);
+    fieldTree.value = schema.tree;
+    subjectFields.value = schema.subjects;
+  } finally {
+    fieldSchemaLoading.value = false;
+  }
+};
+
+watch(selectedFieldArtifactId, (id) => {
+  if (id) loadFieldSchema(id);
+});
+
+// 표현식 텍스트 모드
+const expressionText = ref('steps.filter(s, s.type == "mapping").size() <= 5');
+const exprTextarea = ref<HTMLTextAreaElement | null>(null);
+const textCursorPos = ref<number | null>(null);
+const trackTextCursor = () => {
+  textCursorPos.value = exprTextarea.value?.selectionStart ?? null;
+};
+const insertIntoExpressionText = (token: string) => {
+  const text = expressionText.value;
+  const pos = textCursorPos.value ?? text.length;
+  expressionText.value = text.slice(0, pos) + token + text.slice(pos);
+  const newPos = pos + token.length;
+  nextTick(() => {
+    exprTextarea.value?.focus();
+    exprTextarea.value?.setSelectionRange(newPos, newPos);
+    textCursorPos.value = newPos;
+  });
+};
+
+// 비주얼 빌더 모드 — 필드 선택기에서 클릭한 필드를 어느 입력에 꽂을지 추적
+const activeVisualField = ref<{ target: ConditionItem; key: ActiveFieldKey } | null>(null);
+provide('registerActiveField', (target: ConditionItem, key: ActiveFieldKey) => {
+  activeVisualField.value = { target, key };
+});
+
+onMounted(async () => {
+  const firstCondition = rootGroup.value.children.find((c): c is ConditionItem => c.type === 'condition');
+  if (firstCondition) activeVisualField.value = { target: firstCondition, key: 'filter' };
+
+  fieldPickerArtifacts.value = await apiService.getArtifacts();
+  if (fieldPickerArtifacts.value.length) {
+    // watch(selectedFieldArtifactId)가 필드 스키마 로딩을 트리거한다.
+    selectedFieldArtifactId.value = fieldPickerArtifacts.value[0].id;
+  }
+});
+
+const varFor = (subjectPath: string) => subjectPath.charAt(0).toLowerCase();
+
+// 배열 필드는 subject 경로를, 배열 내부 스칼라 필드는 반복 변수(s.type)를,
+// 배열 밖 스칼라 필드는 전체 경로(artifact.name)를 삽입 텍스트로 사용한다.
+const tokenForTextMode = (field: SchemaField) => {
+  if (field.kind === 'array') return field.arraySubjectPath ?? field.fullPath;
+  if (field.arraySubjectPath) return `${varFor(field.arraySubjectPath)}.${field.itemPath}`;
+  return field.itemPath;
+};
+
+const handleFieldInsert = (field: SchemaField) => {
+  if (exprMode.value === 'text') {
+    insertIntoExpressionText(tokenForTextMode(field));
+    return;
+  }
+
+  if (!activeVisualField.value) return;
+  const { target, key } = activeVisualField.value;
+
+  if (field.kind === 'array') {
+    target.subject = field.arraySubjectPath ?? field.fullPath;
+    return;
+  }
+  if (key === 'subject') return; // subject 칸에는 배열(컬렉션) 필드만 넣을 수 있음
+
+  if (key === 'filter') {
+    target.filter = target.filter ? `${target.filter} && ${field.itemPath}` : field.itemPath;
+  } else {
+    target.value = field.itemPath;
+  }
+};
 </script>
 
 <template>
@@ -88,12 +182,34 @@ const rootGroup = ref<ConditionGroup>({
           </div>
         </div>
 
-        <div v-if="exprMode === 'visual'" class="animate-fade">
-          <ConditionNode :node="rootGroup" :is-root="true" />
-        </div>
-        
-        <div v-else class="animate-fade">
-          <textarea rows="3" class="w-full resize-none rounded-[11px] border border-line-2 bg-surface-2 px-3 py-2.5 font-mono text-[12.5px] text-primary-600 focus:border-primary focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-primary/15">steps.filter(s, s.type == "mapping").size() <= 5</textarea>
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <FieldPicker
+            v-model:artifact-id="selectedFieldArtifactId"
+            :fields="fieldTree"
+            :artifacts="fieldPickerArtifacts"
+            :loading="fieldSchemaLoading"
+            @insert="handleFieldInsert"
+          />
+
+          <div class="min-w-0 flex-1">
+            <div v-if="exprMode === 'visual'" class="animate-fade">
+              <p class="mb-2 text-[11.5px] text-faint">왼쪽 필드 목록에서 클릭하면 방금 선택(포커스)한 조건의 filter/value 칸에 삽입됩니다. 배열 필드는 subject로 설정됩니다.</p>
+              <ConditionNode :node="rootGroup" :is-root="true" :subjects="subjectFields" />
+            </div>
+
+            <div v-else class="animate-fade">
+              <p class="mb-2 text-[11.5px] text-faint">왼쪽 필드 목록을 클릭하면 커서 위치에 경로가 삽입됩니다.</p>
+              <textarea
+                ref="exprTextarea"
+                v-model="expressionText"
+                @click="trackTextCursor"
+                @keyup="trackTextCursor"
+                @focus="trackTextCursor"
+                rows="4"
+                class="w-full resize-none rounded-[11px] border border-line-2 bg-surface-2 px-3 py-2.5 font-mono text-[12.5px] text-primary-600 focus:border-primary focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-primary/15"
+              ></textarea>
+            </div>
+          </div>
         </div>
       </div>
       

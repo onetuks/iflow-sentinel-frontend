@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import Sidebar from './components/Sidebar.vue';
 import Topbar from './components/Topbar.vue';
+import { apiService } from './services/api';
 
-const currentProject = ref('S-Oil IS 전환');
+const currentProject = ref('');
 const isSidebarOpen = ref(false); // 모바일 환경 대응
+
+onMounted(async () => {
+  const projects = await apiService.getProjects();
+  if (projects.length > 0) {
+    currentProject.value = projects[0].name;
+  }
+});
 
 const handleProjectChange = (projectName: string) => {
   currentProject.value = projectName;

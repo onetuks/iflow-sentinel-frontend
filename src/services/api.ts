@@ -1,10 +1,18 @@
 import type { CheckRun, Finding, Tenant } from '../types';
-import { MOCK_TENANTS, MOCK_CHECK_RUNS, MOCK_FINDINGS, MOCK_RULES } from './db';
+import { MOCK_TENANTS, MOCK_CHECK_RUNS, MOCK_FINDINGS, MOCK_RULES, MOCK_IFLOWS, MOCK_ARTIFACTS, MOCK_PARSED_MODEL, MOCK_PROJECTS, MOCK_RUN_STEPS } from './db';
 import type { AppRule } from './db';
 
 // 더미 데이터: 나중에 실제 API 통신 로직(fetch/axios)으로 대체됩니다.
 
 export const apiService = {
+  // 프로젝트 목록 조회
+  async getProjects(): Promise<any[]> {
+    return new Promise((resolve) => setTimeout(() => resolve(MOCK_PROJECTS), 300));
+  },
+  // 실행 단계 목록 조회
+  async getRunSteps(): Promise<any[]> {
+    return new Promise((resolve) => setTimeout(() => resolve(MOCK_RUN_STEPS), 100));
+  },
   // 테넌트 정보 조회
   async getTenants(projectId: string): Promise<Tenant[]> {
     return new Promise((resolve) => {
@@ -28,6 +36,43 @@ export const apiService = {
     return new Promise((resolve) => {
       setTimeout(() => {
         resolve(MOCK_FINDINGS);
+      }, 300);
+    });
+  },
+
+  // 전체 검사 결과 항목 조회
+  async getFindings(): Promise<Finding[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(MOCK_FINDINGS);
+      }, 300);
+    });
+  },
+
+  // iFlow 목록 조회
+  async getIFlows(): Promise<any[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(MOCK_IFLOWS);
+      }, 300);
+    });
+  },
+
+  // 아티팩트 목록 조회
+  async getArtifacts(): Promise<any[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(MOCK_ARTIFACTS);
+      }, 300);
+    });
+  },
+
+  // 파싱 모델 조회
+  async getParsedModel(artifactId: string): Promise<any> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // Mock data is static, so just return it
+        resolve(MOCK_PARSED_MODEL);
       }, 300);
     });
   },

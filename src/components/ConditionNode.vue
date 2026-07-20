@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { inject, useId } from 'vue';
 import { Plus } from 'lucide-vue-next';
+import type { SubjectField } from '../utils/schemaTree';
 
 export interface ConditionItem {
   type: 'condition';
@@ -16,14 +18,29 @@ export interface ConditionGroup {
   children: Array<ConditionItem | ConditionGroup>;
 }
 
+export type ActiveFieldKey = 'subject' | 'filter' | 'value';
+
 const props = defineProps<{
   node: ConditionGroup;
   isRoot?: boolean;
+  subjects: SubjectField[];
 }>();
 
 const emit = defineEmits<{
   (e: 'remove'): void;
 }>();
+
+// RuleForm이 제공하는, "필드 선택기에서 클릭한 필드를 어디에 꽂을지" 추적하는 콜백
+const registerActiveField = inject<((target: ConditionItem, key: ActiveFieldKey) => void) | undefined>(
+  'registerActiveField',
+  undefined
+);
+
+const itemFieldsFor = (subject: string) => props.subjects.find((s) => s.path === subject)?.itemFields ?? [];
+
+// 중첩된 그룹이 재귀 렌더링되어도 datalist id가 서로 겹치지 않도록 인스턴스 단위 고유 id를 부여
+const instanceId = useId();
+const filterListId = (idx: number) => `filter-fields-${instanceId}-${idx}`;
 
 const addCondition = () => {
   props.node.children.push({
@@ -96,14 +113,29 @@ const removeChild = (index: number) => {
 
         <!-- 단일 조건 -->
         <div v-if="child.type === 'condition'" class="group flex flex-nowrap items-center gap-1.5 rounded-lg border border-line bg-white p-1.5 shadow-sm overflow-x-auto hide-scrollbar">
-          <select v-model="child.subject" class="shrink-0 rounded-md border border-line bg-surface px-1.5 py-1 font-mono text-[11px] md:text-[12px] focus:border-primary focus:outline-none">
-            <option value="steps">steps</option>
-            <option value="properties">properties</option>
+          <select
+            v-model="child.subject"
+            @focus="registerActiveField?.(child, 'subject')"
+            class="shrink-0 rounded-md border border-line bg-surface px-1.5 py-1 font-mono text-[11px] md:text-[12px] focus:border-primary focus:outline-none"
+          >
+            <optgroup label="파싱 모델 필드">
+              <option v-for="s in subjects" :key="s.path" :value="s.path">{{ s.path }}</option>
+            </optgroup>
+            <optgroup label="런타임 값">
+              <option value="properties">properties</option>
+            </optgroup>
           </select>
-          <select v-model="child.filter" class="shrink-0 rounded-md border border-line bg-surface px-1.5 py-1 font-mono text-[11px] md:text-[12px] focus:border-primary focus:outline-none">
-            <option value="type == &quot;mapping&quot;">type == "mapping"</option>
-            <option value="">(필터 없음)</option>
-          </select>
+          <input
+            type="text"
+            v-model="child.filter"
+            @focus="registerActiveField?.(child, 'filter')"
+            :list="filterListId(idx)"
+            placeholder="필터 (예: type == &quot;mapping&quot;)"
+            class="min-w-[120px] shrink-0 grow rounded-md border border-line bg-surface px-1.5 py-1 font-mono text-[11px] md:text-[12px] focus:border-primary focus:outline-none"
+          />
+          <datalist :id="filterListId(idx)">
+            <option v-for="f in itemFieldsFor(child.subject)" :key="f.path" :value="`${f.path} == `" />
+          </datalist>
           <select v-model="child.method" class="shrink-0 rounded-md border border-line bg-surface px-1.5 py-1 font-mono text-[11px] md:text-[12px] focus:border-primary focus:outline-none">
             <option value="size()">size()</option>
             <option value="exists()">exists()</option>
@@ -115,15 +147,20 @@ const removeChild = (index: number) => {
             <option value=">">&gt;</option>
             <option value="<">&lt;</option>
           </select>
-          <input type="text" v-model="child.value" class="shrink-0 w-12 md:w-16 rounded-md border border-line bg-surface px-1.5 py-1 text-center font-mono text-[11px] md:text-[12px] focus:border-primary focus:outline-none" />
-          
+          <input
+            type="text"
+            v-model="child.value"
+            @focus="registerActiveField?.(child, 'value')"
+            class="shrink-0 w-12 md:w-16 rounded-md border border-line bg-surface px-1.5 py-1 text-center font-mono text-[11px] md:text-[12px] focus:border-primary focus:outline-none"
+          />
+
           <button @click="removeChild(idx)" class="ml-auto flex shrink-0 h-[24px] w-[24px] items-center justify-center rounded-md text-faint hover:bg-fail-bg hover:text-fail transition">
             ✕
           </button>
         </div>
 
         <!-- 하위 그룹 (재귀 호출) -->
-        <ConditionNode v-else-if="child.type === 'group'" :node="child" @remove="removeChild(idx)" />
+        <ConditionNode v-else-if="child.type === 'group'" :node="child" :subjects="subjects" @remove="removeChild(idx)" />
       </div>
     </div>
 

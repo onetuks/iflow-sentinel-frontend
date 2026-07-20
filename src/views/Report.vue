@@ -1,13 +1,74 @@
 <script setup lang="ts">
+import { ref, onMounted } from 'vue';
 import { FileText, Download, UploadCloud, AlertCircle } from 'lucide-vue-next';
+import { apiService } from '../services/api';
 
-const findings = [
-  { severity: 'FAIL', rule: 'no-hardcoded-endpoint', iflow: 'SOIL_OrderIF', location: 'Receiver "SendToS4"', message: '엔드포인트 주소가 하드코딩되어 있습니다. 외부화 파라미터로 관리하세요.', isFail: true },
-  { severity: 'FAIL', rule: 'sender-naming', iflow: 'SOIL_InvoiceOut', location: 'Sender "BillingLegacy"', message: '송신 시스템 이름이 OP_/B2B_/CP_ 접두사를 따르지 않습니다.', isFail: true },
-  { severity: 'WARN', rule: 'must-have-error-handler', iflow: 'SOIL_OrderIF', location: '흐름 전체', message: '예외 처리 서브프로세스가 없습니다.', isFail: false },
-  { severity: 'WARN', rule: 'required-logging', iflow: 'SOIL_MaterialMaster', location: 'Groovy "MapMat"', message: '처리 단계에 로깅 스텝이 없습니다.', isFail: false },
-  { severity: 'WARN', rule: 'processdirect-pairing', iflow: 'SOIL_ShipmentStatus', location: 'Receiver PD "/ship/status"', message: '대응하는 Sender ProcessDirect 채널을 찾을 수 없습니다.', isFail: false },
-];
+const findings = ref<any[]>([]);
+
+const passCount = ref(12);
+const warnCount = ref(3);
+const failCount = ref(2);
+
+onMounted(async () => {
+  // 실제 API 호출 시뮬레이션
+  const [mockFindings, mockIflows] = await Promise.all([
+    apiService.getFindings(),
+    apiService.getIFlows()
+  ]);
+
+  findings.value = mockFindings.map(f => {
+    // artifactId(예: a1)를 iflow id(예: if1)로 매핑하여 이름 찾기
+    const iflowId = f.artifactId.replace('a', 'if');
+    const iflow = mockIflows.find(i => i.id === iflowId);
+    
+    return {
+      severity: f.severity.toUpperCase(),
+      rule: f.ruleKey,
+      iflow: iflow ? iflow.name : f.artifactId,
+      location: f.location,
+      message: f.message,
+      isFail: f.severity === 'fail'
+    };
+  });
+  
+  failCount.value = findings.value.filter(f => f.isFail).length;
+  warnCount.value = findings.value.filter(f => !f.isFail).length;
+});
+
+const downloadExcel = () => {
+  if (findings.value.length === 0) return;
+  
+  const headers = ['심각도', '규칙', 'iFlow', '위치', '메시지'];
+  const csvRows = [headers.join(',')];
+  
+  findings.value.forEach(f => {
+    const row = [
+      f.severity,
+      f.rule,
+      f.iflow,
+      `"${f.location}"`, // 쉼표 포함 방지
+      `"${f.message}"`
+    ];
+    csvRows.push(row.join(','));
+  });
+  
+  // 엑셀에서 한글이 깨지지 않도록 BOM 추가
+  const csvString = "\uFEFF" + csvRows.join('\n');
+  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `검사_리포트_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const downloadPDF = () => {
+  window.print();
+};
 </script>
 
 <template>
@@ -19,11 +80,11 @@ const findings = [
           S-Oil IS 전환 · <span class="font-mono font-semibold">QAS</span> · 2026-07-13 13:20 · <span class="font-mono">inspien-base + soil-strict</span>
         </div>
       </div>
-      <div class="ml-auto flex shrink-0 gap-2">
-        <button class="flex items-center gap-1.5 rounded-[11px] border border-line-2 bg-surface px-3.5 py-2.5 text-[12.5px] font-semibold text-ink shadow-sm transition hover:border-[#D0D5E1] hover:bg-surface-2 hover:shadow-md">
+      <div class="ml-auto flex shrink-0 gap-2 print:hidden">
+        <button @click="downloadExcel" class="flex items-center gap-1.5 rounded-[11px] border border-line-2 bg-surface px-3.5 py-2.5 text-[12.5px] font-semibold text-ink shadow-sm transition hover:border-[#D0D5E1] hover:bg-surface-2 hover:shadow-md">
           <FileText class="h-[15px] w-[15px]" /> Excel
         </button>
-        <button class="flex items-center gap-1.5 rounded-[11px] border border-line-2 bg-surface px-3.5 py-2.5 text-[12.5px] font-semibold text-ink shadow-sm transition hover:border-[#D0D5E1] hover:bg-surface-2 hover:shadow-md">
+        <button @click="downloadPDF" class="flex items-center gap-1.5 rounded-[11px] border border-line-2 bg-surface px-3.5 py-2.5 text-[12.5px] font-semibold text-ink shadow-sm transition hover:border-[#D0D5E1] hover:bg-surface-2 hover:shadow-md">
           <Download class="h-[15px] w-[15px]" /> PDF
         </button>
         <button class="flex items-center gap-1.5 rounded-[11px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(76,93,240,0.32)] transition hover:shadow-[0_6px_20px_rgba(76,93,240,0.42)]">
@@ -46,15 +107,15 @@ const findings = [
           </p>
           <div class="mt-5 flex gap-6">
             <div class="flex flex-col">
-              <span class="font-disp text-2xl font-bold text-pass leading-none">12</span>
+              <span class="font-disp text-2xl font-bold text-pass leading-none">{{ passCount }}</span>
               <span class="mt-1 text-[11.5px] font-semibold uppercase tracking-widest text-muted">Pass</span>
             </div>
             <div class="flex flex-col">
-              <span class="font-disp text-2xl font-bold text-warn leading-none">3</span>
+              <span class="font-disp text-2xl font-bold text-warn leading-none">{{ warnCount }}</span>
               <span class="mt-1 text-[11.5px] font-semibold uppercase tracking-widest text-muted">Warn</span>
             </div>
             <div class="flex flex-col">
-              <span class="font-disp text-2xl font-bold text-fail leading-none">2</span>
+              <span class="font-disp text-2xl font-bold text-fail leading-none">{{ failCount }}</span>
               <span class="mt-1 text-[11.5px] font-semibold uppercase tracking-widest text-muted">Fail</span>
             </div>
           </div>
@@ -67,9 +128,9 @@ const findings = [
       <div class="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
         <h3 class="m-0 font-disp text-[14.5px] font-semibold">위반 상세</h3>
         <span class="text-[12.5px] font-medium text-faint">Findings · 5</span>
-        <div class="ml-auto flex shrink-0 gap-2">
-          <button class="rounded-lg border border-fail-line px-2.5 py-1 text-[11.5px] font-bold text-fail shadow-sm transition hover:bg-fail-bg">FAIL 2</button>
-          <button class="rounded-lg border border-warn-line px-2.5 py-1 text-[11.5px] font-bold text-warn shadow-sm transition hover:bg-warn-bg">WARN 3</button>
+        <div class="ml-auto flex shrink-0 gap-2 print:hidden">
+          <button class="rounded-lg border border-fail-line px-2.5 py-1 text-[11.5px] font-bold text-fail shadow-sm transition hover:bg-fail-bg">FAIL {{ failCount }}</button>
+          <button class="rounded-lg border border-warn-line px-2.5 py-1 text-[11.5px] font-bold text-warn shadow-sm transition hover:bg-warn-bg">WARN {{ warnCount }}</button>
         </div>
       </div>
       <div class="overflow-x-auto">

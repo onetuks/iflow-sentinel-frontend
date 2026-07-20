@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { PlayCircle } from 'lucide-vue-next';
-import { MOCK_TENANTS, MOCK_CHECK_RUNS, MOCK_IFLOWS } from '../services/db';
+import { apiService } from '../services/api';
 import type { Tenant, CheckRun, IFlow } from '../types';
 
 const router = useRouter();
@@ -14,13 +14,23 @@ const progressLabel = ref('준비 중…');
 const tenants = ref<Tenant[]>([]);
 const checkRuns = ref<CheckRun[]>([]);
 const iflows = ref<IFlow[]>([]);
+const steps = ref<any[]>([]);
 
-onMounted(() => {
-  tenants.value = MOCK_TENANTS;
-  checkRuns.value = MOCK_CHECK_RUNS;
-  iflows.value = MOCK_IFLOWS;
+onMounted(async () => {
+  const projectId = 'p1'; // Mock project id for now
+  const [mockTenants, mockCheckRuns, mockIflows, mockRunSteps] = await Promise.all([
+    apiService.getTenants(projectId),
+    apiService.getCheckRuns(projectId),
+    apiService.getIFlows(),
+    apiService.getRunSteps()
+  ]);
+  
+  tenants.value = mockTenants;
+  checkRuns.value = mockCheckRuns;
+  iflows.value = mockIflows;
+  steps.value = mockRunSteps;
   if (tenants.value.length > 0) {
-    activeTab.value = tenants.value.find(t => t.name.includes('QAS'))?.name || tenants.value[0].name;
+    activeTab.value = tenants.value.find(t => t.tenantName.includes('QAS'))?.tenantName || tenants.value[0].tenantName;
   }
 });
 
@@ -28,24 +38,16 @@ const startRun = () => {
   isRunning.value = true;
   progress.value = 0;
   
-  const steps = [
-    { p: 15, l: '아티팩트 다운로드 중…' },
-    { p: 45, l: '.iflw 파싱 중…' },
-    { p: 70, l: '규칙 적용 중…' },
-    { p: 92, l: 'cross-artifact 검사…' },
-    { p: 100, l: '완료' }
-  ];
-  
   let i = 0;
   const tick = () => {
-    if (i >= steps.length) {
+    if (i >= steps.value.length) {
       setTimeout(() => {
         router.push('/report');
       }, 450);
       return;
     }
-    progress.value = steps[i].p;
-    progressLabel.value = steps[i].l;
+    progress.value = steps.value[i].p;
+    progressLabel.value = steps.value[i].l;
     i++;
     setTimeout(tick, 520);
   };
@@ -86,13 +88,19 @@ const activeTab = ref('QAS');
               <button 
                 v-for="tenant in tenants" 
                 :key="tenant.id"
-                @click="activeTab = tenant.name"
+                @click="activeTab = tenant.tenantName"
                 :class="[
-                  'rounded-[10px] px-4 py-2 font-mono text-[12.5px] font-semibold transition',
-                  activeTab === tenant.name ? 'bg-ink text-white shadow-sm' : 'bg-surface-2 text-muted hover:bg-line-2 hover:text-ink'
+                  'flex items-center gap-2 rounded-[10px] px-2.5 py-2 font-mono text-[12.5px] font-semibold transition',
+                  activeTab === tenant.tenantName ? 'bg-ink text-white shadow-sm' : 'bg-surface-2 text-muted hover:bg-line-2 hover:text-ink'
                 ]"
               >
-                {{ tenant.name }}
+                <div 
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-[11px] font-bold shadow-sm transition"
+                  :class="activeTab === tenant.tenantName ? 'bg-ink text-white shadow-sm' : 'bg-surface-2 text-muted hover:bg-line-2 hover:text-ink'"
+                >
+                  {{ tenant.tenantName.split(' ')[0][0] }}
+                </div>
+                {{ tenant.tenantName }}
               </button>
             </div>
           </div>

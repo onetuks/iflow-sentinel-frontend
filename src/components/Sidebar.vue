@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { apiService } from '../services/api';
 import { 
   Box, 
   Map, 
@@ -22,14 +23,14 @@ const isMenuOpen = ref(false);
 const isCheckMenuOpen = ref(true);
 const isRuleMenuOpen = ref(true);
 
-const projects = [
-  { name: 'S-Oil IS 전환', initial: 'S', gradient: 'from-[#F0A35E] to-[#E0663C]' },
-  { name: 'NanoH2O IS 전환', initial: 'N', gradient: 'from-[#5AC8E0] to-[#3E8BD0]' },
-  { name: 'Hynix 신규 개발', initial: 'H', gradient: 'from-[#8B7DF0] to-[#5B4BD0]' }
-];
+const projects = ref<any[]>([]);
+
+onMounted(async () => {
+  projects.value = await apiService.getProjects();
+});
 
 const currentProjectData = computed(() => {
-  return projects.find(p => p.name === props.currentProject) || projects[0];
+  return projects.value.find(p => p.name === props.currentProject) || projects.value[0] || {};
 });
 
 const selectProject = (projectName: string) => {
@@ -173,6 +174,13 @@ const selectProject = (projectName: string) => {
             active-class="bg-primary-tint font-semibold !text-primary-600"
           >
             <span>규칙 관리</span>
+          </router-link>
+          <router-link 
+            to="/parser-explorer" 
+            class="flex items-center gap-2.5 rounded-xl px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink"
+            active-class="bg-primary-tint font-semibold !text-primary-600"
+          >
+            <span>Parser 탐색기</span>
           </router-link>
         </div>
       </div>

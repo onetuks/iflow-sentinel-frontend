@@ -5,7 +5,7 @@ export type RuleScope = 'SINGLE' | 'CROSS';
 export interface Tenant {
   id: string;
   projectId: string;
-  name: string;
+  tenantName: string;
   odataUrl: string;
   clientId: string;
   clientSecret: string;
