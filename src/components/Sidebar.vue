@@ -252,7 +252,7 @@ const selectProject = (projectName: string) => {
             class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink"
             active-class="bg-primary-tint font-semibold !text-primary-600"
           >
-            <span>프로퍼티 확인</span>
+            <span>프로퍼티 추적</span>
           </router-link>
         </div>
       </div>
@@ -294,6 +294,7 @@ const selectProject = (projectName: string) => {
       <div v-else-if="activePopover === 'artifact'" class="flex flex-col gap-0.5">
         <router-link to="/parser-explorer" class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink" active-class="bg-primary-tint font-semibold !text-primary-600" @click="activePopover = null"><span>Parser 탐색기</span></router-link>
         <router-link to="/artifact-tracker" class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink" active-class="bg-primary-tint font-semibold !text-primary-600" @click="activePopover = null"><span>아티팩트 추적</span></router-link>
+        <router-link to="/property-explorer" class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink" active-class="bg-primary-tint font-semibold !text-primary-600" @click="activePopover = null"><span>프로퍼티 추적</span></router-link>
       </div>
 
       <div v-else-if="activePopover === 'project'" class="flex flex-col gap-0.5">

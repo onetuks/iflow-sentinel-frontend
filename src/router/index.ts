@@ -50,11 +50,11 @@ const router = createRouter({
       name: 'ArtifactTracker',
       component: () => import('../views/ArtifactTracker.vue')
     },
-    // {
-    //   path: '/property-explorer',
-    //   name: 'PropertyExplorer',
-    //   component: () => import('../views/PropertyExplorer.vue')
-    // }
+    {
+      path: '/property-explorer',
+      name: 'PropertyExplorer',
+      component: () => import('../views/PropertyExplorer.vue')
+    }
   ]
 });
 
