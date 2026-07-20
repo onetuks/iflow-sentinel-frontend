@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inject, useId } from 'vue';
-import { Plus } from 'lucide-vue-next';
+import { Plus, Trash2, RotateCcw } from 'lucide-vue-next';
 import type { SubjectField } from '../utils/schemaTree';
 
 export interface ConditionItem {
@@ -73,6 +73,10 @@ const addGroup = () => {
 const removeChild = (index: number) => {
   props.node.children.splice(index, 1);
 };
+
+const clearAll = () => {
+  props.node.children = [];
+};
 </script>
 
 <template>
@@ -95,8 +99,8 @@ const removeChild = (index: number) => {
         </button>
       </div>
       
-      <button v-if="!isRoot" @click="emit('remove')" class="text-[12px] font-semibold text-faint hover:text-fail transition">
-        그룹 삭제
+      <button v-if="!isRoot" @click="emit('remove')" class="flex items-center gap-1 text-[12px] font-semibold text-faint hover:text-fail transition">
+        <Trash2 class="w-3.5 h-3.5" /> 그룹 삭제
       </button>
     </div>
 
@@ -154,8 +158,8 @@ const removeChild = (index: number) => {
             class="shrink-0 w-12 md:w-16 rounded-md border border-line bg-surface px-1.5 py-1 text-center font-mono text-[11px] md:text-[12px] focus:border-primary focus:outline-none"
           />
 
-          <button @click="removeChild(idx)" class="ml-auto flex shrink-0 h-[24px] w-[24px] items-center justify-center rounded-md text-faint hover:bg-fail-bg hover:text-fail transition">
-            ✕
+          <button @click="removeChild(idx)" class="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-faint hover:bg-fail-bg hover:text-fail transition" title="조건 제거">
+            <Trash2 class="w-3.5 h-3.5" /> <span class="hidden md:inline">제거</span>
           </button>
         </div>
 
@@ -171,6 +175,9 @@ const removeChild = (index: number) => {
       </button>
       <button @click="addGroup" class="flex items-center gap-1.5 rounded-lg border border-primary-tint bg-primary-tint px-3 py-1.5 text-[11.5px] font-semibold text-primary-600 transition hover:bg-[#D5DAFB]">
         <Plus class="h-[13px] w-[13px]" /> 그룹(괄호) 추가
+      </button>
+      <button v-if="isRoot" @click="clearAll" class="ml-auto flex items-center gap-1.5 rounded-lg border border-fail-bg bg-fail-bg px-3 py-1.5 text-[11.5px] font-semibold text-fail transition hover:bg-[#FCE8E8]">
+        <RotateCcw class="h-[13px] w-[13px]" /> 초기화
       </button>
     </div>
   </div>

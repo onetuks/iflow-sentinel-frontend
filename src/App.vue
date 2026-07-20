@@ -20,7 +20,7 @@ const handleProjectChange = (projectName: string) => {
 </script>
 
 <template>
-  <div class="grid min-h-screen grid-cols-1 md:grid-cols-[250px_1fr]">
+  <div class="flex min-h-screen w-full">
     <!-- 사이드바 -->
     <Sidebar 
       :current-project="currentProject"
@@ -30,7 +30,7 @@ const handleProjectChange = (projectName: string) => {
     />
     
     <!-- 메인 컨텐츠 영역 -->
-    <div class="flex min-w-0 flex-col relative">
+    <div class="flex-1 flex min-w-0 flex-col relative w-full">
       <Topbar 
         :current-project="currentProject"
         @toggle-sidebar="isSidebarOpen = !isSidebarOpen"

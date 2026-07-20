@@ -155,10 +155,10 @@ const yamlHtml = computed(() => yamlLines.value.join('\n'))
         <i class="block w-[11px] h-[11px] rounded-full bg-[#6FBE7A]"></i>
       </span>
       <span class="font-mono text-xs text-[#8B94AD] ml-[5px] truncate">{{ yamlFileName }}</span>
-      <span class="ml-auto flex items-center gap-[6px] font-mono text-[11px] text-[#5FD69C] shrink-0">
+      <!-- <span class="ml-auto flex items-center gap-[6px] font-mono text-[11px] text-[#5FD69C] shrink-0">
         <span class="w-[6px] h-[6px] rounded-full bg-[#5FD69C] shadow-[0_0_0_3px_rgba(95,214,156,0.22)]"></span>
         live
-      </span>
+      </span> -->
     </div>
 
     <!-- yaml body -->
