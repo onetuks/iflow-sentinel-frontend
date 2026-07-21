@@ -297,3 +297,24 @@ export const MOCK_TRACKER_ARTIFACTS: TrackerArtifact[] = [
   { id: '7', package: 'com.example.sales', artifact: 'SD_Order_Create', runtime: 'SD_Order_Create_PRD', status: 'Deployed' },
   { id: '8', package: 'com.example.sales', artifact: 'SD_Customer_Sync', runtime: 'SD_Customer_Sync_Legacy', status: 'Illusion' }
 ];
+
+export const MOCK_CONFIGURED_PARAMETERS: Record<string, Record<string, any>> = {
+  'S-Oil PRD': {
+    '1': [
+      { name: 'Receiver_Address', value: '${property.L_System_DEST_1}', configuredValue: '${property.L_System_DEST_1}', isRequired: 'false', description: '선택 파라미터 (Optional)' },
+      { name: 'Sender_Address', value: '/api/v1/sender', configuredValue: '/api/prd/sender', isRequired: 'true', description: '필수 파라미터 (Required)' }
+    ]
+  },
+  'S-Oil QAS': {
+    '1': [
+      { name: 'Receiver_Address', value: '${property.L_System_DEST_1}', configuredValue: '${property.L_System_DEST_1}', isRequired: 'false', description: '선택 파라미터 (Optional)' },
+      { name: 'Sender_Address', value: '/api/v1/sender', configuredValue: '/api/qas/sender', isRequired: 'true', description: '필수 파라미터 (Required)' }
+    ]
+  },
+  'S-Oil DEV': {
+    '1': [
+      { name: 'Receiver_Address', value: '${property.L_System_DEST_1}', configuredValue: '${property.L_System_DEST_1}', isRequired: 'false', description: '선택 파라미터 (Optional)' },
+      { name: 'Sender_Address', value: '/api/v1/sender', configuredValue: '/api/v1/sender', isRequired: 'true', description: '필수 파라미터 (Required)' }
+    ]
+  }
+};

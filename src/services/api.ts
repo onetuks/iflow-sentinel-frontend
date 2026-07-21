@@ -1,5 +1,5 @@
 import type { CheckRun, Finding, Tenant } from '../types';
-import { MOCK_TENANTS, MOCK_CHECK_RUNS, MOCK_FINDINGS, MOCK_RULES, MOCK_IFLOWS, MOCK_ARTIFACTS, MOCK_PARSED_MODEL, MOCK_PROJECTS, MOCK_RUN_STEPS, MOCK_TRACKER_ARTIFACTS } from './db';
+import { MOCK_TENANTS, MOCK_CHECK_RUNS, MOCK_FINDINGS, MOCK_RULES, MOCK_IFLOWS, MOCK_ARTIFACTS, MOCK_PARSED_MODEL, MOCK_PROJECTS, MOCK_RUN_STEPS, MOCK_TRACKER_ARTIFACTS, MOCK_CONFIGURED_PARAMETERS } from './db';
 import type { AppRule, TrackerArtifact } from './db';
 
 export type { AppRule, TrackerArtifact };
@@ -24,12 +24,33 @@ export const apiService = {
     });
   },
 
-  // 검사 이력 조회
+  // 테넌트 연결 테스트
+  async testTenantConnection(tenant: Tenant): Promise<{ success: boolean; message: string }> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: true,
+          message: 'OAuth2 인증 성공 · 22 패키지 조회됨'
+        });
+      }, 900);
+    });
+  },
+
+  // 검사 이력 목록 조회
   async getCheckRuns(projectId: string): Promise<CheckRun[]> {
     return new Promise((resolve) => {
       setTimeout(() => {
         resolve(MOCK_CHECK_RUNS.filter(c => c.projectId === projectId));
       }, 300);
+    });
+  },
+
+  // 단일 검사 이력 조회
+  async getCheckRun(runId: string): Promise<CheckRun | undefined> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(MOCK_CHECK_RUNS.find(c => c.id === runId));
+      }, 200);
     });
   },
 
@@ -86,6 +107,17 @@ export const apiService = {
       setTimeout(() => {
         // Mock data is static, so just return it
         resolve(MOCK_PARSED_MODEL);
+      }, 300);
+    });
+  },
+
+  // Configured Parameters 조회
+  async getConfiguredParameters(tenantName: string, artifactId: string): Promise<any[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const tenantConfigs = MOCK_CONFIGURED_PARAMETERS[tenantName] || {};
+        const params = tenantConfigs[artifactId] || [];
+        resolve(params);
       }, 300);
     });
   },

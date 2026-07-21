@@ -5,16 +5,24 @@ import { apiService } from '../services/api';
 
 const findings = ref<any[]>([]);
 
-const passCount = ref(12);
-const warnCount = ref(3);
-const failCount = ref(2);
+const passCount = ref(0);
+const warnCount = ref(0);
+const failCount = ref(0);
 
 onMounted(async () => {
   // 실제 API 호출 시뮬레이션
-  const [mockFindings, mockIflows] = await Promise.all([
+  const [mockFindings, mockIflows, checkRun] = await Promise.all([
     apiService.getFindings(),
-    apiService.getIFlows()
+    apiService.getIFlows(),
+    apiService.getCheckRun('cr1')
   ]);
+
+  if (checkRun) {
+    passCount.value = checkRun.summary.pass;
+    warnCount.value = checkRun.summary.warn;
+    failCount.value = checkRun.summary.fail;
+  }
+
 
   findings.value = mockFindings.map(f => {
     // artifactId(예: a1)를 iflow id(예: if1)로 매핑하여 이름 찾기
@@ -30,9 +38,6 @@ onMounted(async () => {
       isFail: f.severity === 'fail'
     };
   });
-  
-  failCount.value = findings.value.filter(f => f.isFail).length;
-  warnCount.value = findings.value.filter(f => !f.isFail).length;
 });
 
 const downloadExcel = () => {

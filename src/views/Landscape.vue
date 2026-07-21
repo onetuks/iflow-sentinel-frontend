@@ -25,13 +25,17 @@ onMounted(async () => {
   isLoading.value = false;
 });
 
-const handleTestConnection = () => {
+const handleTestConnection = async () => {
   isTesting.value = true;
   testResult.value = '확인 중…';
-  setTimeout(() => {
-    testResult.value = 'OAuth2 인증 성공 · 22 패키지 조회됨';
+  try {
+    const result = await apiService.testTenantConnection(currentTenant.value as any);
+    testResult.value = result.message;
+  } catch (error) {
+    testResult.value = '연결 오류 발생';
+  } finally {
     isTesting.value = false;
-  }, 900);
+  }
 };
 
 const handleAddTenantClick = () => {
@@ -67,7 +71,6 @@ const handleSaveTenant = () => {
     tenants.value.push({
       id: `t_${Date.now()}`,
       projectId: 'p1',
-      name: currentTenant.value.tenantName,
       odataUrl: currentTenant.value.odataUrl,
       clientId: currentTenant.value.clientId,
       clientSecret: currentTenant.value.clientSecret,

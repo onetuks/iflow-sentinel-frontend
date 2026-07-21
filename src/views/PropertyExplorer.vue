@@ -52,14 +52,21 @@ watch(selectedPackage, () => {
 
 watch(selectedArtifact, async (newVal) => {
   if (newVal) {
-    const model = await apiService.getParsedModel(newVal);
+    const [model, configuredParams] = await Promise.all([
+      apiService.getParsedModel(newVal),
+      apiService.getConfiguredParameters(activeTenant.value, newVal)
+    ]);
+    
     if (model && model.parameters) {
-      parameters.value = model.parameters.map((p: any) => ({
-        name: p.name,
-        defaultValue: p.value || '-',
-        configuredValue: p.value === '/api/v1/sender' ? '/api/prd/sender' : p.value || '-',
-        description: p.isRequired === 'true' ? '필수 파라미터 (Required)' : '선택 파라미터 (Optional)'
-      }));
+      parameters.value = model.parameters.map((p: any) => {
+        const configuredMatch = configuredParams.find(cp => cp.name === p.name);
+        return {
+          name: p.name,
+          defaultValue: p.value || '-',
+          configuredValue: configuredMatch ? configuredMatch.configuredValue : (p.value || '-'),
+          description: p.isRequired === 'true' ? '필수 파라미터 (Required)' : '선택 파라미터 (Optional)'
+        };
+      });
     } else {
       parameters.value = [];
     }
