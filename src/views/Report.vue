@@ -11,10 +11,10 @@ const failCount = ref(0);
 
 onMounted(async () => {
   // 실제 API 호출 시뮬레이션
-  const [mockFindings, mockIflows, checkRun] = await Promise.all([
+  const [findingsResult, mockIflows, checkRun] = await Promise.all([
     apiService.getFindings(),
     apiService.getIFlows(),
-    apiService.getCheckRun('cr1')
+    apiService.getCheckRun(1)
   ]);
 
   if (checkRun) {
@@ -23,20 +23,28 @@ onMounted(async () => {
     failCount.value = checkRun.summary.fail;
   }
 
-
-  findings.value = mockFindings.map(f => {
-    // artifactId(예: a1)를 iflow id(예: if1)로 매핑하여 이름 찾기
-    const iflowId = f.artifactId.replace('a', 'if');
+  findings.value = findingsResult.map(f => {
+    // artifactId(예: 1)를 iflow id(예: if1)로 매핑하여 이름 찾기
+    const iflowId = `if${f.artifactId}`;
     const iflow = mockIflows.find(i => i.id === iflowId);
     
     return {
       severity: f.severity.toUpperCase(),
       rule: f.ruleKey,
-      iflow: iflow ? iflow.name : f.artifactId,
+      iflow: iflow ? iflow.name : String(f.artifactId),
       location: f.location,
       message: f.message,
-      isFail: f.severity === 'fail'
+      isFail: f.severity.toUpperCase() === 'FAIL'
     };
+  }).sort((a, b) => {
+    const severityOrder: Record<string, number> = { 'FAIL': 0, 'WARN': 1, 'INFO': 2 };
+    // 1. 심각도 순 (FAIL -> WARN -> INFO)
+    const aSev = severityOrder[a.severity] ?? 99;
+    const bSev = severityOrder[b.severity] ?? 99;
+    
+    if (aSev !== bSev) return aSev - bSev;
+    // 2. iFlow 이름 순
+    return a.iflow.localeCompare(b.iflow);
   });
 });
 

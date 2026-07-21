@@ -1,25 +1,26 @@
-export type Severity = 'fail' | 'warn' | 'info';
+export type Severity = 'FAIL' | 'WARN' | 'INFO';
 export type TenantPlatform = 'NEO' | 'CLOUD_FOUNDRY';
 export type RuleScope = 'SINGLE' | 'CROSS';
 
 export interface Tenant {
-  id: string;
-  projectId: string;
-  tenantName: string;
+  id: number;
+  projectId: number;
+  name: string;
   odataUrl: string;
   clientId: string;
-  clientSecret: string;
+  clientSecret?: string;
   tokenUrl: string;
   platformType: TenantPlatform;
-  status: 'connected' | 'disconnected' | 'error';
+  status?: 'connected' | 'disconnected' | 'error';
   lastChecked?: string;
   packageCount?: number;
 }
 
 export interface Rule {
+  id: number;
   ruleKey: string;
   isGlobal: boolean;
-  customProject?: string;
+  customProjectId?: number | null;
   type: string;
   severity: Severity;
   target?: any;
@@ -35,28 +36,29 @@ export interface ProjectRule {
 }
 
 export interface CheckRun {
-  id: string;
-  projectId: string;
-  tenantName: string;
-  startedAt: string;
+  id: number;
+  projectId: number;
+  tenantName?: string;
+  startedAt?: string;
   status: 'RUNNING' | 'COMPLETED' | 'FAILED';
   summary: {
     pass: number;
     warn: number;
     fail: number;
   };
-  verdict: string;
+  verdict?: string;
 }
 
 export interface Finding {
-  id: string;
-  checkRunId: string;
-  artifactId: string;
+  id: number;
+  checkRunId?: number;
+  artifactId: number;
+  ruleId: number;
   ruleKey: string;
   severity: Severity;
   location: string;
   message: string;
-  count: number;
+  count?: number;
 }
 
 export interface IFlow {

@@ -6,12 +6,16 @@ import type { Tenant } from '../types';
 import type { TrackerArtifact } from '../services/api';
 
 const tenants = ref<Tenant[]>([]);
-const activeTenant = ref('');
+const selectedTenantId = ref<number>(1);
 const allArtifacts = ref<TrackerArtifact[]>([]);
 
 const selectedPackage = ref('');
 const selectedArtifact = ref('');
 const parameters = ref<any[]>([]);
+
+const currentTenant = computed(() => 
+  tenants.value.find(t => t.id === selectedTenantId.value)
+);
 
 const availablePackages = computed(() => {
   const pkgs = new Set(allArtifacts.value.map(a => a.package));
@@ -23,16 +27,17 @@ const availableArtifacts = computed(() => {
 });
 
 onMounted(async () => {
-  const projectId = 'p1';
-  tenants.value = await apiService.getTenants(projectId);
+  const data = await apiService.getTenants(1);
+  tenants.value = data;
   if (tenants.value.length > 0) {
-    activeTenant.value = tenants.value[0].tenantName;
+    selectedTenantId.value = tenants.value[0].id;
     await fetchArtifacts();
   }
 });
 
 const fetchArtifacts = async () => {
-  allArtifacts.value = await apiService.getTrackerArtifacts(activeTenant.value);
+  if (!currentTenant.value) return;
+  allArtifacts.value = await apiService.getTrackerArtifacts(currentTenant.value.name);
   if (availablePackages.value.length > 0) {
     selectedPackage.value = availablePackages.value[0];
   } else {
@@ -40,7 +45,7 @@ const fetchArtifacts = async () => {
   }
 };
 
-watch(activeTenant, fetchArtifacts);
+watch(selectedTenantId, fetchArtifacts);
 
 watch(selectedPackage, () => {
   if (availableArtifacts.value.length > 0) {
@@ -51,10 +56,10 @@ watch(selectedPackage, () => {
 });
 
 watch(selectedArtifact, async (newVal) => {
-  if (newVal) {
+  if (newVal && currentTenant.value) {
     const [model, configuredParams] = await Promise.all([
       apiService.getParsedModel(newVal),
-      apiService.getConfiguredParameters(activeTenant.value, newVal)
+      apiService.getConfiguredParameters(currentTenant.value.name, newVal)
     ]);
     
     if (model && model.parameters) {
@@ -88,12 +93,14 @@ watch(selectedArtifact, async (newVal) => {
     <div class="mb-5 flex flex-wrap gap-4 shrink-0 bg-surface border border-line rounded-2xl p-5 shadow-sm">
       <div class="flex-1 min-w-[200px]">
         <label class="mb-1.5 block text-[12.5px] font-semibold text-ink">테넌트</label>
-        <select 
-          v-model="activeTenant" 
-          class="w-full rounded-[10px] border border-line bg-white px-3 py-2 text-[13px] text-ink focus:border-primary focus:ring-1 focus:ring-primary outline-none transition"
-        >
-          <option v-for="t in tenants" :key="t.id" :value="t.tenantName">{{ t.tenantName }}</option>
-        </select>
+        <div class="relative">
+          <select 
+            v-model="selectedTenantId" 
+            class="w-full rounded-[10px] border border-line bg-white px-3 py-2 text-[13px] text-ink focus:border-primary focus:ring-1 focus:ring-primary outline-none transition"
+          >
+            <option v-for="t in tenants" :key="t.id" :value="t.id">{{ t.name }}</option>
+          </select>
+        </div>
       </div>
       <div class="flex-1 min-w-[200px]">
         <label class="mb-1.5 block text-[12.5px] font-semibold text-ink">패키지</label>

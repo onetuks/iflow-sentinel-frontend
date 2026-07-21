@@ -18,15 +18,15 @@ const emit = defineEmits<{
 const globalRules = computed(() => props.rules?.filter(r => r.scopeType === 'global') || []);
 const projectRules = computed(() => props.rules?.filter(r => r.scopeType === 'project') || []);
 
-const getSeverityClass = (severity: string, ruleType: string) => {
-  if (ruleType === 'custom-expression' && (severity === 'info' || severity === 'warn')) return 'bg-pass-bg border border-pass-line text-pass font-bold';
-  if (severity === 'fail') return 'bg-fail text-white';
-  if (severity === 'warn') return 'bg-warn text-white';
+const getSeverityClass = (severity: string) => {
+  if (severity === 'FAIL') return 'bg-fail text-white';
+  if (severity === 'WARN') return 'bg-warn text-white';
+  if (severity === 'INFO') return 'bg-primary text-white';
   return 'bg-surface-2 text-muted';
 };
 
 const getSeverityText = (rule: AppRule) => {
-  if (rule.ruleType === 'custom-expression' && (rule.severity === 'info' || rule.severity === 'warn')) return '조건식';
+  if (rule.ruleType === 'custom-expression' && (rule.severity === 'INFO' || rule.severity === 'WARN')) return '조건식';
   return rule.severity.toUpperCase();
 };
 </script>
@@ -50,7 +50,7 @@ const getSeverityText = (rule: AppRule) => {
             :class="['flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 transition', (mode === 'edit' && currentRuleId === rule.name && scope === 'global') ? 'bg-line-2' : 'hover:bg-surface-2']"
           >
             <span class="font-mono text-[12.5px] font-semibold text-primary-600 truncate mr-2">{{ rule.name }}</span>
-            <span :class="['shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold', getSeverityClass(rule.severity, rule.ruleType)]">{{ getSeverityText(rule) }}</span>
+            <span :class="['shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold', getSeverityClass(rule.severity)]">{{ getSeverityText(rule) }}</span>
           </div>
         </div>
         <button @click="emit('create', 'global')" class="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line-2 px-3 py-1.5 text-[12px] font-semibold text-muted transition hover:bg-surface-2 hover:text-ink">
@@ -71,7 +71,7 @@ const getSeverityText = (rule: AppRule) => {
             :class="['flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 transition', (mode === 'edit' && currentRuleId === rule.name && scope === 'project') ? 'bg-line-2' : 'hover:bg-surface-2']"
           >
             <span class="font-mono text-[12.5px] font-semibold text-primary-600 truncate mr-2">{{ rule.name }}</span>
-            <span :class="['shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold', getSeverityClass(rule.severity, rule.ruleType)]">{{ getSeverityText(rule) }}</span>
+            <span :class="['shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold', getSeverityClass(rule.severity)]">{{ getSeverityText(rule) }}</span>
           </div>
         </div>
         <button @click="emit('create', 'project')" class="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line-2 px-3 py-1.5 text-[12px] font-semibold text-muted transition hover:bg-surface-2 hover:text-ink">
