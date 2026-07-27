@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Plus } from 'lucide-vue-next';
-import type { AppRule } from '../services/db';
+import type { AppRule } from '../types';
 
 const props = defineProps<{
   mode: string;

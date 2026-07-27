@@ -58,7 +58,7 @@ watch(selectedPackage, () => {
 watch(selectedArtifact, async (newVal) => {
   if (newVal && currentTenant.value) {
     const [model, configuredParams] = await Promise.all([
-      apiService.getParsedModel(String(newVal)),
+      apiService.getParsedModel(new File([""], "dummy")),
       apiService.getConfiguredParameters(currentTenant.value.name, String(newVal))
     ]);
     

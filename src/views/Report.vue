@@ -19,7 +19,7 @@ onMounted(async () => {
   findings.value = mockFindings.map(f => {
     // artifactId(예: a1)를 iflow id(예: if1)로 매핑하여 이름 찾기
     const iflowId = String(f.artifactId).replace('a', 'if');
-    const iflow = mockIflows.find(i => i.id === iflowId);
+    const iflow = mockIflows.find(i => i.id === Number(iflowId));
     
     return {
       severity: f.severity.toUpperCase(),

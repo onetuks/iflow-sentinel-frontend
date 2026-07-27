@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { Info, Library } from 'lucide-vue-next';
 import { apiService } from '../services/api';
-import type { AppRule } from '../services/db';
+import type { AppRule } from '../types';
 
 const router = useRouter();
 
@@ -16,8 +16,8 @@ onMounted(async () => {
   isLoading.value = false;
 });
 
-const globalOnCount = computed(() => rules.value.filter(r => r.scopeType === 'global' && r.enabled).length);
-const projectOnCount = computed(() => rules.value.filter(r => r.scopeType === 'project' && r.enabled).length);
+const globalOnCount = computed(() => rules.value.filter((r: AppRule) => r.scopeType === 'global' && r.enabled).length);
+const projectOnCount = computed(() => rules.value.filter((r: AppRule) => r.scopeType === 'project' && r.enabled).length);
 </script>
 
 <template>

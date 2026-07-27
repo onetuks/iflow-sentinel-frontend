@@ -16,10 +16,10 @@ const artifacts = ref<any[]>([]);
 const mockParsedModel = ref<any>(null);
 
 onMounted(async () => {
-  artifacts.value = await apiService.getArtifacts();
+  artifacts.value = await apiService.getArtifacts(1);
   if (artifacts.value.length > 0) {
     selectedArtifact.value = artifacts.value[0].id;
-    mockParsedModel.value = await apiService.getParsedModel(selectedArtifact.value!);
+    mockParsedModel.value = await apiService.getParsedModel(new File([""], "dummy"));
   }
 });
 

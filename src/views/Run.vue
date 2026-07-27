@@ -109,7 +109,7 @@ const activeTab = ref('QAS');
             <label v-for="iflow in iflows" :key="iflow.id" class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-white">
               <input type="checkbox" checked class="h-4 w-4 rounded text-primary focus:ring-primary" />
               <span class="font-mono text-[13px] font-semibold text-ink">{{ iflow.name }}</span>
-              <span class="ml-auto font-mono text-[11.5px] text-muted">{{ iflow.protocol }} · {{ iflow.version }}</span>
+              <span class="ml-auto font-mono text-[11.5px] text-muted">{{ iflow.type }} · {{ iflow.version }}</span>
             </label>
           </div>
           

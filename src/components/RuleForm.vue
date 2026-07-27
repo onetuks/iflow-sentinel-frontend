@@ -26,8 +26,8 @@ const rootGroup = ref<ConditionGroup>({
 });
 
 // 파서 탐색기(ParserExplorer)와 동일한 API로 아티팩트/파싱 모델을 가져와 선택 가능한 필드 트리를 구성한다.
-const fieldPickerArtifacts = ref<FieldPickerArtifact[]>([]);
-const selectedFieldArtifactId = ref('');
+const fieldPickerArtifacts = ref<any[]>([]);
+const selectedFieldArtifactId = ref<any>("");
 const fieldTree = ref<SchemaField[]>([]);
 const subjectFields = ref<SubjectField[]>([]);
 const fieldSchemaLoading = ref(false);
@@ -35,7 +35,7 @@ const fieldSchemaLoading = ref(false);
 const loadFieldSchema = async (artifactId: string) => {
   fieldSchemaLoading.value = true;
   try {
-    const model = await apiService.getParsedModel(artifactId);
+    const model = await apiService.getParsedModel(new File([""], "dummy"));
     const schema = getExpressionSchema(model);
     fieldTree.value = schema.tree;
     subjectFields.value = schema.subjects;
@@ -77,7 +77,7 @@ onMounted(async () => {
   const firstCondition = rootGroup.value.children.find((c): c is ConditionItem => c.type === 'condition');
   if (firstCondition) activeVisualField.value = { target: firstCondition, key: 'filter' };
 
-  fieldPickerArtifacts.value = await apiService.getArtifacts();
+  fieldPickerArtifacts.value = await apiService.getArtifacts(1);
   if (fieldPickerArtifacts.value.length) {
     // watch(selectedFieldArtifactId)가 필드 스키마 로딩을 트리거한다.
     selectedFieldArtifactId.value = fieldPickerArtifacts.value[0].id;

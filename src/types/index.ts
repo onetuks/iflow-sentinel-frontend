@@ -62,8 +62,38 @@ export interface Finding {
 }
 
 export interface IFlow {
-  id: string;
+  id: number;
+  integrationPackageId: number;
+  sapArtifactId: string;
   name: string;
-  protocol: string;
   version: string;
+  type: string;
+}
+
+
+export interface Project {
+  id: number;
+  name: string;
+}
+
+export interface TrackerArtifact {
+  id: number;
+  package: string;
+  artifact: string;
+  runtime: string;
+  status: 'Deployed' | 'Undeployed' | 'Illusion';
+}
+
+export interface AppRule {
+  id: number;
+  name: string;
+  scope: '전역 규칙' | '프로젝트 규칙';
+  scopeType: 'global' | 'project';
+  description: string;
+  enabled: boolean;
+  statusText: string;
+  statusClass: string;
+  ruleType: string;
+  severity: 'FAIL' | 'WARN' | 'INFO';
+  ruleMsg: string;
 }

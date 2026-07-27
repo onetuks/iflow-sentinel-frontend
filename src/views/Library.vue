@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { Save } from 'lucide-vue-next';
 import { apiService } from '../services/api';
-import type { AppRule } from '../services/db';
+import type { AppRule } from '../types';
 // @ts-ignore
 import YamlPreview from '../components/YamlPreview.vue';
 import RuleList from '../components/RuleList.vue';
@@ -39,7 +39,7 @@ const editRule = (id: string, isGlobal: boolean) => {
   ruleIdInput.value = id;
   
   // 더미 데이터 로딩 (이제 전체 rules 목록에서 찾음)
-  const targetRule = rules.value.find(r => r.name === id);
+  const targetRule = rules.value.find((r: AppRule) => r.name === id);
   if (targetRule) {
     ruleType.value = targetRule.ruleType;
     severity.value = targetRule.severity;
@@ -55,7 +55,7 @@ const editRule = (id: string, isGlobal: boolean) => {
 const saveRule = async () => {
   const isGlobal = scope.value === 'global';
   const newRule: AppRule = {
-    id: mode.value === 'create' ? ruleIdInput.value : currentRuleId.value,
+    id: mode.value === "create" ? 0 : Number(currentRuleId.value),
     name: ruleIdInput.value,
     scope: isGlobal ? '전역 규칙' : '프로젝트 규칙',
     scopeType: scope.value as 'global' | 'project',
@@ -79,7 +79,7 @@ const saveRule = async () => {
       alert('규칙 생성에 실패했습니다.');
     }
   } else {
-    const response = await apiService.updateRule(currentRuleId.value, newRule);
+    const response = await apiService.updateRule(Number(currentRuleId.value), newRule);
     if (response.status >= 200 && response.status < 300) {
       alert(`[API: updateRule] '${newRule.name}' 규칙이 수정되었습니다.`);
       rules.value = await apiService.getRules();
