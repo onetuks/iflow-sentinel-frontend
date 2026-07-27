@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { Save, PanelRightClose, PanelRightOpen } from 'lucide-vue-next';
+import { Save } from 'lucide-vue-next';
 import { apiService } from '../services/api';
 import type { AppRule } from '../services/db';
 // @ts-ignore
@@ -12,9 +12,8 @@ import RuleForm from '../components/RuleForm.vue';
 const scope = ref('global'); // 'global' | 'project'
 const mode = ref('create'); // 'create' | 'edit'
 const currentRuleId = ref('');
-const severity = ref('fail'); // 'fail' | 'warn' | 'info'
+const severity = ref('FAIL'); // 'FAIL' | 'WARN' | 'INFO'
 const exprMode = ref('visual'); // 'visual' | 'text'
-const showYamlPreview = ref(true);
 
 const rules = ref<AppRule[]>([]);
 const route = useRoute();
@@ -30,7 +29,7 @@ const startCreate = (s: string) => {
   ruleIdInput.value = '';
   ruleType.value = 'naming-convention';
   ruleMsg.value = '';
-  severity.value = 'fail';
+  severity.value = 'FAIL';
 };
 
 const editRule = (id: string, isGlobal: boolean) => {
@@ -48,7 +47,7 @@ const editRule = (id: string, isGlobal: boolean) => {
   } else {
     // 만약 없는 경우의 기본값 (혹은 생성 모드로 둔다면)
     ruleType.value = 'naming-convention';
-    severity.value = 'fail';
+    severity.value = 'FAIL';
     ruleMsg.value = '';
   }
 };
@@ -65,7 +64,7 @@ const saveRule = async () => {
     statusText: isGlobal ? '전역 규칙' : '프로젝트 규칙',
     statusClass: isGlobal ? 'border-line-2 bg-surface-2 text-muted' : 'border-[#D5DAFB] bg-primary-tint text-primary-600',
     ruleType: ruleType.value,
-    severity: severity.value as 'fail' | 'warn' | 'info',
+    severity: severity.value as 'FAIL' | 'WARN' | 'INFO',
     ruleMsg: ruleMsg.value
   };
 
@@ -109,11 +108,6 @@ onMounted(async () => {
         <div class="mt-1 text-[13px] text-muted">전역 규칙과 프로젝트 규칙을 생성하거나 수정합니다</div>
       </div>
       <div class="ml-auto flex shrink-0 gap-2">
-        <button @click="showYamlPreview = !showYamlPreview" class="flex items-center gap-1.5 whitespace-nowrap rounded-[11px] border border-line-2 bg-surface px-3 py-2.5 text-[13px] font-semibold text-ink shadow-sm transition hover:bg-surface-2 hover:shadow">
-          <PanelRightClose v-if="showYamlPreview" class="h-4 w-4" />
-          <PanelRightOpen v-else class="h-4 w-4" />
-          <span class="hidden sm:inline">{{ showYamlPreview ? 'YAML 숨기기' : 'YAML 보기' }}</span>
-        </button>
         <button @click="saveRule" class="flex items-center gap-1.5 whitespace-nowrap rounded-[11px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(76,93,240,0.32)] transition hover:shadow-[0_6px_20px_rgba(76,93,240,0.42)]">
           <Save class="h-[15px] w-[15px]" />
           규칙 저장
@@ -135,9 +129,8 @@ onMounted(async () => {
       </div>
 
       <!-- 오른쪽 폼 영역 -->
-      <div :class="['grid gap-4 transition-all duration-300', showYamlPreview ? 'grid-cols-1 xl:grid-cols-8' : 'grid-cols-1']">
+      <div class="grid grid-cols-2 gap-4">
         <RuleForm 
-          :class="showYamlPreview ? 'xl:col-span-5' : 'xl:col-span-1'"
           v-model:scope="scope"
           v-model:mode="mode"
           v-model:ruleIdInput="ruleIdInput"
@@ -149,8 +142,6 @@ onMounted(async () => {
 
         <!-- YAML Preview 컴포넌트 -->
         <YamlPreview 
-          class="xl:col-span-3 min-w-0"
-          v-show="showYamlPreview"
           :rule-id="ruleIdInput"
           :rule-type="ruleType"
           :severity="severity"

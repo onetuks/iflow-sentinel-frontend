@@ -9,7 +9,7 @@ const router = useRouter();
 
 const isRunning = ref(false);
 const progress = ref(0);
-const progressLabel = ref('준�?중�?);
+const progressLabel = ref('준비 중…');
 
 const tenants = ref<Tenant[]>([]);
 const checkRuns = ref<CheckRun[]>([]);
@@ -17,10 +17,9 @@ const iflows = ref<IFlow[]>([]);
 const steps = ref<any[]>([]);
 
 onMounted(async () => {
-  const projectId = 'p1'; // Mock project id for now
   const [mockTenants, mockCheckRuns, mockIflows, mockRunSteps] = await Promise.all([
-    apiService.getTenants(projectId),
-    apiService.getCheckRuns(projectId),
+    apiService.getTenants(1),
+    apiService.getCheckRuns(1),
     apiService.getIFlows(),
     apiService.getRunSteps()
   ]);
@@ -61,8 +60,8 @@ const activeTab = ref('QAS');
   <div class="animate-fade">
     <div class="mb-6 flex min-h-[44px] flex-wrap items-center gap-3.5">
       <div>
-        <h1 class="m-0 font-disp text-2xl font-bold tracking-tight">검???�행</h1>
-        <div class="mt-1 text-[13px] text-muted">?�넌?��? iFlow�??�택??규칙 검?��? ?�행?�니??/div>
+        <h1 class="m-0 font-disp text-2xl font-bold tracking-tight">검사 실행</h1>
+        <div class="mt-1 text-[13px] text-muted">테넌트와 iFlow를 선택해 규칙 검사를 실행합니다</div>
       </div>
       <div class="ml-auto flex shrink-0 gap-2">
         <button 
@@ -71,7 +70,7 @@ const activeTab = ref('QAS');
           class="flex items-center gap-1.5 whitespace-nowrap rounded-[11px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(76,93,240,0.32)] transition hover:shadow-[0_6px_20px_rgba(76,93,240,0.42)] disabled:opacity-50 disabled:hover:shadow-[0_4px_14px_rgba(76,93,240,0.32)]"
         >
           <PlayCircle class="h-[15px] w-[15px]" />
-          검???�행
+          검사 실행
         </button>
       </div>
     </div>
@@ -79,11 +78,11 @@ const activeTab = ref('QAS');
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr_1fr]">
       <div class="rounded-2xl border border-line bg-surface shadow-md">
         <div class="border-b border-line px-5 py-4">
-          <h3 class="m-0 font-disp text-[14.5px] font-semibold">?�???�택</h3>
+          <h3 class="m-0 font-disp text-[14.5px] font-semibold">대상 선택</h3>
         </div>
         <div class="p-5">
           <div class="mb-4">
-            <label class="mb-1.5 block text-[12.5px] font-semibold text-[#3B4257]">?�넌??/label>
+            <label class="mb-1.5 block text-[12.5px] font-semibold text-[#3B4257]">테넌트</label>
             <div class="flex items-center gap-1.5">
               <button 
                 v-for="tenant in tenants" 
@@ -115,10 +114,10 @@ const activeTab = ref('QAS');
           </div>
           
           <div class="mt-4 text-[12px] text-faint font-mono">
-            ?�용 규칙: <span class="font-semibold text-ink">8�?/span> ?�용 �?(<router-link to="/rulesets" class="text-primary-600 underline decoration-primary-tint-2 underline-offset-2 hover:decoration-primary-600">?�용 규칙 보기</router-link>)
+            적용 규칙: <span class="font-semibold text-ink">8개</span> 사용 중 (<router-link to="/rulesets" class="text-primary-600 underline decoration-primary-tint-2 underline-offset-2 hover:decoration-primary-600">적용 규칙 보기</router-link>)
           </div>
 
-          <!-- ?�로그레???�역 -->
+          <!-- 프로그레스 영역 -->
           <div v-if="isRunning || progress > 0" class="mt-5 animate-fade rounded-xl bg-primary-tint p-4">
             <div class="mb-2 flex items-center justify-between">
               <span class="font-mono text-[12px] font-semibold text-primary-600">{{ progressLabel }}</span>
@@ -136,15 +135,15 @@ const activeTab = ref('QAS');
 
       <div class="rounded-2xl border border-line bg-surface shadow-md">
         <div class="border-b border-line px-5 py-4">
-          <h3 class="m-0 font-disp text-[14.5px] font-semibold">최근 ?�행</h3>
+          <h3 class="m-0 font-disp text-[14.5px] font-semibold">최근 실행</h3>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full border-collapse">
             <thead>
               <tr>
-                <th class="border-b border-line px-4.5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-faint">?�넌??/th>
-                <th class="border-b border-line px-4.5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-faint">?�각</th>
-                <th class="border-b border-line px-4.5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-faint">?�정</th>
+                <th class="border-b border-line px-4.5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-faint">테넌트</th>
+                <th class="border-b border-line px-4.5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-faint">시각</th>
+                <th class="border-b border-line px-4.5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-faint">판정</th>
               </tr>
             </thead>
             <tbody>
@@ -152,16 +151,16 @@ const activeTab = ref('QAS');
                 <td class="border-b border-line px-4.5 py-3 align-middle">
                   <span :class="[
                     'rounded-full border border-line-2 px-2.5 py-0.5 font-mono text-[10.5px] font-semibold',
-                    run.name.includes('QAS') ? 'bg-warn-bg text-qas' : (run.name.includes('DEV') ? 'bg-[#EEF0FE] text-dev' : 'bg-pass-bg text-prd')
+                    (run.tenantName || '').includes('QAS') ? 'bg-warn-bg text-qas' : ((run.tenantName || '').includes('DEV') ? 'bg-[#EEF0FE] text-dev' : 'bg-pass-bg text-prd')
                   ]">
-                    {{ run.name }}
+                    {{ (run.tenantName || '') }}
                   </span>
                 </td>
-                <td class="border-b border-line px-4.5 py-3 align-middle font-mono text-[11.5px] text-muted">{{ run.startedAt.includes(' ') ? run.startedAt.split(' ')[1] : run.startedAt }}</td>
+                <td class="border-b border-line px-4.5 py-3 align-middle font-mono text-[11.5px] text-muted">{{ (run.startedAt || '').includes(' ') ? (run.startedAt || '').split(' ')[1] : (run.startedAt || '') }}</td>
                 <td class="border-b border-line px-4.5 py-3 text-right align-middle">
                   <span :class="[
                     'rounded-full border px-2.5 py-0.5 font-mono text-[11.5px] font-semibold',
-                    run.verdict === '?�과' ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail-line bg-fail-bg text-fail'
+                    run.verdict === '통과' ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail-line bg-fail-bg text-fail'
                   ]">
                     {{ run.verdict }}
                   </span>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router';
 import { computed } from 'vue';
-import { Search, Bell, Menu } from 'lucide-vue-next';
+import { Bell, Menu } from 'lucide-vue-next';
 
 defineProps<{
   currentProject: string;

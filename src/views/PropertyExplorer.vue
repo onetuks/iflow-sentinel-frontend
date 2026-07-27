@@ -10,7 +10,7 @@ const selectedTenantId = ref<number>(1);
 const allArtifacts = ref<TrackerArtifact[]>([]);
 
 const selectedPackage = ref('');
-const selectedArtifact = ref('');
+const selectedArtifact = ref<number | ''>('');
 const parameters = ref<any[]>([]);
 
 const currentTenant = computed(() => 
@@ -58,13 +58,13 @@ watch(selectedPackage, () => {
 watch(selectedArtifact, async (newVal) => {
   if (newVal && currentTenant.value) {
     const [model, configuredParams] = await Promise.all([
-      apiService.getParsedModel(newVal),
-      apiService.getConfiguredParameters(currentTenant.value.name, newVal)
+      apiService.getParsedModel(String(newVal)),
+      apiService.getConfiguredParameters(currentTenant.value.name, String(newVal))
     ]);
     
     if (model && model.parameters) {
       parameters.value = model.parameters.map((p: any) => {
-        const configuredMatch = configuredParams.find(cp => cp.name === p.name);
+        const configuredMatch = configuredParams.find((cp: any) => cp.name === p.name);
         return {
           name: p.name,
           defaultValue: p.value || '-',

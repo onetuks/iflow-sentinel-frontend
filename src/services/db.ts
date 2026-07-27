@@ -232,7 +232,7 @@ export interface TrackerArtifact {
   package: string;
   artifact: string;
   runtime: string;
-  status: 'Deployed' | 'Illusion';
+  status: 'Deployed' | 'Undeployed' | 'Illusion';
 }
 
 export const MOCK_TRACKER_ARTIFACTS: TrackerArtifact[] = [
