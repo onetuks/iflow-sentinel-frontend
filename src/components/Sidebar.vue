@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
-import { apiService } from '../services/api';
+import { ref, computed, watch } from 'vue';
 import { 
   Box, 
   Map, 
@@ -15,6 +14,7 @@ import {
 const props = defineProps<{
   currentProject: string;
   isOpen: boolean;
+  projects?: any[];
 }>();
 
 const emit = defineEmits<{
@@ -53,11 +53,7 @@ watch(isCollapsed, (newVal) => {
   if (!newVal) activePopover.value = null;
 });
 
-const projects = ref<any[]>([]);
-
-onMounted(async () => {
-  projects.value = await apiService.getProjects();
-});
+const projects = computed(() => props.projects || []);
 
 const currentProjectData = computed(() => {
   return projects.value.find(p => p.name === props.currentProject) || projects.value[0] || {};
@@ -112,7 +108,7 @@ const selectProject = (projectName: string) => {
         </span>
         <span v-if="!isCollapsed" class="flex flex-col items-start overflow-hidden leading-tight flex-1">
           <b class="block w-full truncate text-left font-disp text-[13.5px] font-semibold">{{ currentProjectData.name }}</b>
-          <small class="text-[10.5px] text-faint">프로젝트 · DEV/QAS/PRD</small>
+          <small class="text-[10.5px] text-faint">프로젝트</small>
         </span>
       </button>
 

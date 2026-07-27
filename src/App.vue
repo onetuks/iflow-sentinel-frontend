@@ -6,13 +6,21 @@ import { apiService } from './services/api';
 
 const currentProject = ref('');
 const isSidebarOpen = ref(false); // 모바일 환경 대응
+const projects = ref<any[]>([]);
 
-onMounted(async () => {
-  const projects = await apiService.getProjects();
-  if (projects.length > 0) {
-    currentProject.value = projects[0].name;
+const fetchProjects = async () => {
+  projects.value = await apiService.getProjects();
+  // If current project was deleted, or not set
+  if (!projects.value.find(p => p.name === currentProject.value)) {
+    if (projects.value.length > 0) {
+      currentProject.value = projects.value[0].name;
+    } else {
+      currentProject.value = '';
+    }
   }
-});
+};
+
+onMounted(fetchProjects);
 
 const handleProjectChange = (projectName: string) => {
   currentProject.value = projectName;
@@ -24,6 +32,7 @@ const handleProjectChange = (projectName: string) => {
     <!-- 사이드바 -->
     <Sidebar 
       :current-project="currentProject"
+      :projects="projects"
       :is-open="isSidebarOpen"
       @update:project="handleProjectChange"
       @close="isSidebarOpen = false"
@@ -37,7 +46,7 @@ const handleProjectChange = (projectName: string) => {
       />
       <!-- 실제 화면이 표시되는 영역 (전체 화면 적용을 위해 w-full 사용) -->
       <main class="w-full max-w-none px-4 md:px-8 py-6 pb-12">
-        <router-view />
+        <router-view @refresh-projects="fetchProjects" />
       </main>
     </div>
   </div>

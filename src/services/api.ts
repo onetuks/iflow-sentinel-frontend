@@ -4,6 +4,7 @@ export type { AppRule, TrackerArtifact } from "../types";
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
+  console.log(API_BASE);
   const response = await fetch(`${API_BASE}${url}`, {
     ...options,
     headers: {
@@ -27,6 +28,26 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
 export const apiService = {
   async getProjects(): Promise<Project[]> {
     return fetchApi<Project[]>('/projects');
+  },
+  async createProject(name: string): Promise<{ status: number; data?: Project }> {
+    const r: any = await fetchApi<any>('/projects', {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    });
+    return { status: 201, data: r };
+  },
+  async updateProject(id: number, name: string): Promise<{ status: number; data?: Project }> {
+    const r: any = await fetchApi<any>(`/projects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name })
+    });
+    return { status: 200, data: r };
+  },
+  async deleteProject(id: number): Promise<{ status: number }> {
+    const response = await fetch(`${API_BASE}/projects/${id}`, {
+      method: 'DELETE'
+    });
+    return { status: response.status };
   },
   async getRunSteps(): Promise<any[]> {
     return [];
@@ -102,7 +123,7 @@ export const apiService = {
       customProjectId: rule.scopeType === 'project' ? 1 : null,
       type: rule.ruleType.toUpperCase().replace(/-/g, '_'),
       severity: rule.severity.toUpperCase(),
-      target: {}, 
+      target: {},
       params: {},
       message: rule.description,
       enabled: rule.enabled
