@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { 
-  Box, 
-  Map, 
-  Settings2,
-  PlayCircle,
+import {
+  Box,
+  Map,
+  ShieldCheck,
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
-  Package
+  Package,
+  Sliders,
+  RefreshCw
 } from 'lucide-vue-next';
 
 const props = defineProps<{
@@ -23,15 +24,15 @@ const emit = defineEmits<{
 }>();
 
 const isMenuOpen = ref(false);
-const isCheckMenuOpen = ref(false);
-const isRuleMenuOpen = ref(false);
-const isArtifactMenuOpen = ref(false);
+// '검사'와 '규칙'은 별도 그룹이었으나, 규칙 검사 기능 자체가 후순위로 밀리면서
+// 하나의 '규칙검사' 그룹으로 통합하고 사이드바 맨 아래로 내렸다.
+const isRuleCheckMenuOpen = ref(false);
 const isCollapsed = ref(false);
 
-const activePopover = ref<'check' | 'rule' | 'artifact' | 'project' | null>(null);
+const activePopover = ref<'rulecheck' | 'project' | null>(null);
 const popoverTop = ref(0);
 
-const toggleMenu = (e: MouseEvent, menu: 'check' | 'rule' | 'artifact' | 'project') => {
+const toggleMenu = (e: MouseEvent, menu: 'rulecheck' | 'project') => {
   if (isCollapsed.value) {
     if (activePopover.value === menu) {
       activePopover.value = null;
@@ -42,9 +43,7 @@ const toggleMenu = (e: MouseEvent, menu: 'check' | 'rule' | 'artifact' | 'projec
     }
   } else {
     activePopover.value = null;
-    if (menu === 'check') isCheckMenuOpen.value = !isCheckMenuOpen.value;
-    if (menu === 'rule') isRuleMenuOpen.value = !isRuleMenuOpen.value;
-    if (menu === 'artifact') isArtifactMenuOpen.value = !isArtifactMenuOpen.value;
+    if (menu === 'rulecheck') isRuleCheckMenuOpen.value = !isRuleCheckMenuOpen.value;
     if (menu === 'project') isMenuOpen.value = !isMenuOpen.value;
   }
 };
@@ -154,101 +153,91 @@ const selectProject = (projectName: string) => {
       >
         <Map class="h-[17px] w-[17px] opacity-80 shrink-0" />
         <span v-if="!isCollapsed">랜드스케이프</span>
-        <span v-if="!isCollapsed" class="ml-auto rounded-full border border-line bg-surface-2 px-1.5 py-0 text-[11px] font-semibold text-muted">3</span>
         <span v-else class="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary"></span>
       </router-link>
 
-      <div class="mt-2 relative">
-        <button 
-          @click="toggleMenu($event, 'check')" 
-          :class="['flex w-full items-center rounded-xl py-2 font-sans text-[13.5px] font-semibold text-ink transition hover:bg-surface-2', (isCollapsed && activePopover === 'check') ? 'bg-surface-2' : '', isCollapsed ? 'justify-center px-0' : 'justify-between px-2.5']"
+      <!-- 핵심 기능: 기능 단위로 독립된 최상위 메뉴 (더 이상 '아티팩트' 하위로 묶지 않음) -->
+      <router-link
+        to="/artifact-tracker"
+        @click="activePopover = null"
+        :class="['mt-2 flex items-center rounded-xl py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink', isCollapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5']"
+        active-class="bg-primary-tint font-semibold !text-primary-600"
+      >
+        <Package class="h-[17px] w-[17px] opacity-80 shrink-0" />
+        <span v-if="!isCollapsed">아티팩트 추적</span>
+      </router-link>
+
+      <router-link
+        to="/property-explorer"
+        @click="activePopover = null"
+        :class="['flex items-center rounded-xl py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink', isCollapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5']"
+        active-class="bg-primary-tint font-semibold !text-primary-600"
+      >
+        <Sliders class="h-[17px] w-[17px] opacity-80 shrink-0" />
+        <span v-if="!isCollapsed">프로퍼티 추적</span>
+      </router-link>
+
+      <router-link
+        to="/message-reprocess"
+        @click="activePopover = null"
+        :class="['flex items-center rounded-xl py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink', isCollapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5']"
+        active-class="bg-primary-tint font-semibold !text-primary-600"
+      >
+        <RefreshCw class="h-[17px] w-[17px] opacity-80 shrink-0" />
+        <span v-if="!isCollapsed">메시지 재처리</span>
+      </router-link>
+
+      <!-- 규칙검사 (후순위): 원래 별도였던 '검사'/'규칙' 그룹과 Parser 탐색기를 통합하고
+           맨 아래로 내려 시각적으로 옅게 표시한다. 항목은 계속 클릭 가능하다. -->
+      <div class="mt-3 relative border-t border-line pt-3">
+        <button
+          @click="toggleMenu($event, 'rulecheck')"
+          :class="['flex w-full items-center rounded-xl py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2', (isCollapsed && activePopover === 'rulecheck') ? 'bg-surface-2' : '', isCollapsed ? 'justify-center px-0' : 'justify-between px-2.5']"
         >
           <div :class="['flex items-center', isCollapsed ? 'justify-center' : 'gap-2.5']">
-            <PlayCircle class="h-[17px] w-[17px] opacity-80 text-muted shrink-0" />
-            <span v-if="!isCollapsed">검사</span>
+            <ShieldCheck class="h-[17px] w-[17px] opacity-70 shrink-0" />
+            <span v-if="!isCollapsed" class="flex items-center gap-1.5">
+              규칙검사
+              <span class="rounded-full border border-line-2 bg-surface-2 px-1.5 py-0 text-[10px] font-semibold text-faint">준비중</span>
+            </span>
           </div>
-          <ChevronDown v-if="!isCollapsed" class="h-4 w-4 text-faint transition-transform duration-200" :class="{ '-rotate-90': !isCheckMenuOpen }" />
+          <ChevronDown v-if="!isCollapsed" class="h-4 w-4 text-faint transition-transform duration-200" :class="{ '-rotate-90': !isRuleCheckMenuOpen }" />
         </button>
-        <div v-show="!isCollapsed && isCheckMenuOpen" class="mt-0.5 flex flex-col gap-0.5 pl-[28px]">
-          <router-link 
-            to="/run" 
+        <div v-show="!isCollapsed && isRuleCheckMenuOpen" class="mt-0.5 flex flex-col gap-0.5 pl-[28px]">
+          <router-link
+            to="/run"
             class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink"
             active-class="bg-primary-tint font-semibold !text-primary-600"
           >
             <span>검사 실행</span>
           </router-link>
-          <router-link 
-            to="/report" 
+          <router-link
+            to="/report"
             class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink"
             active-class="bg-primary-tint font-semibold !text-primary-600"
           >
             <span>검사 리포트</span>
           </router-link>
-        </div>
-      </div>
-
-      <div class="mt-1 relative">
-        <button 
-          @click="toggleMenu($event, 'rule')" 
-          :class="['flex w-full items-center rounded-xl py-2 font-sans text-[13.5px] font-semibold text-ink transition hover:bg-surface-2', (isCollapsed && activePopover === 'rule') ? 'bg-surface-2' : '', isCollapsed ? 'justify-center px-0' : 'justify-between px-2.5']"
-        >
-          <div :class="['flex items-center', isCollapsed ? 'justify-center' : 'gap-2.5']">
-            <Settings2 class="h-[17px] w-[17px] opacity-80 text-muted shrink-0" />
-            <span v-if="!isCollapsed">규칙</span>
-          </div>
-          <ChevronDown v-if="!isCollapsed" class="h-4 w-4 text-faint transition-transform duration-200" :class="{ '-rotate-90': !isRuleMenuOpen }" />
-        </button>
-        <div v-show="!isCollapsed && isRuleMenuOpen" class="mt-0.5 flex flex-col gap-0.5 pl-[28px]">
-          <router-link 
-            to="/rulesets" 
+          <router-link
+            to="/rulesets"
             class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink"
             active-class="bg-primary-tint font-semibold !text-primary-600"
           >
             <span>적용 규칙</span>
           </router-link>
-          <router-link 
-            to="/library" 
+          <router-link
+            to="/library"
             class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink"
             active-class="bg-primary-tint font-semibold !text-primary-600"
           >
             <span>규칙 관리</span>
           </router-link>
-        </div>
-      </div>
-
-      <!-- 아티팩트 관리기 -->
-      <div class="mt-1 relative">
-        <button 
-          @click="toggleMenu($event, 'artifact')" 
-          :class="['flex w-full items-center rounded-xl py-2 font-sans text-[13.5px] font-semibold text-ink transition hover:bg-surface-2', (isCollapsed && activePopover === 'artifact') ? 'bg-surface-2' : '', isCollapsed ? 'justify-center px-0' : 'justify-between px-2.5']"
-        >
-          <div :class="['flex items-center', isCollapsed ? 'justify-center' : 'gap-2.5']">
-            <Package class="h-[17px] w-[17px] opacity-80 text-muted shrink-0" />
-            <span v-if="!isCollapsed">아티팩트</span>
-          </div>
-          <ChevronDown v-if="!isCollapsed" class="h-4 w-4 text-faint transition-transform duration-200" :class="{ '-rotate-90': !isArtifactMenuOpen }" />
-        </button>
-        <div v-show="!isCollapsed && isArtifactMenuOpen" class="mt-0.5 flex flex-col gap-0.5 pl-[28px]">
-          <router-link 
-            to="/parser-explorer" 
+          <router-link
+            to="/parser-explorer"
             class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink"
             active-class="bg-primary-tint font-semibold !text-primary-600"
           >
             <span>Parser 탐색기</span>
-          </router-link>
-          <router-link 
-            to="/artifact-tracker" 
-            class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink"
-            active-class="bg-primary-tint font-semibold !text-primary-600"
-          >
-            <span>아티팩트 추적</span>
-          </router-link>
-          <router-link 
-            to="/property-explorer" 
-            class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink"
-            active-class="bg-primary-tint font-semibold !text-primary-600"
-          >
-            <span>프로퍼티 추적</span>
           </router-link>
         </div>
       </div>
@@ -272,25 +261,17 @@ const selectProject = (projectName: string) => {
     >
       <div class="mb-1.5 border-b border-line-2 px-2.5 pb-2 pt-1 flex items-center justify-between">
         <span class="font-disp text-[13px] font-bold text-ink">
-          {{ activePopover === 'check' ? '검사' : activePopover === 'rule' ? '규칙' : activePopover === 'artifact' ? '아티팩트' : '프로젝트' }}
+          {{ activePopover === 'rulecheck' ? '규칙검사' : '프로젝트' }}
         </span>
         <button @click="activePopover = null" class="text-faint hover:text-ink text-xs transition">✕</button>
       </div>
-      
-      <div v-if="activePopover === 'check'" class="flex flex-col gap-0.5">
+
+      <div v-if="activePopover === 'rulecheck'" class="flex flex-col gap-0.5">
         <router-link to="/run" class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink" active-class="bg-primary-tint font-semibold !text-primary-600" @click="activePopover = null"><span>검사 실행</span></router-link>
         <router-link to="/report" class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink" active-class="bg-primary-tint font-semibold !text-primary-600" @click="activePopover = null"><span>검사 리포트</span></router-link>
-      </div>
-
-      <div v-else-if="activePopover === 'rule'" class="flex flex-col gap-0.5">
         <router-link to="/rulesets" class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink" active-class="bg-primary-tint font-semibold !text-primary-600" @click="activePopover = null"><span>적용 규칙</span></router-link>
         <router-link to="/library" class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink" active-class="bg-primary-tint font-semibold !text-primary-600" @click="activePopover = null"><span>규칙 관리</span></router-link>
-      </div>
-
-      <div v-else-if="activePopover === 'artifact'" class="flex flex-col gap-0.5">
         <router-link to="/parser-explorer" class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink" active-class="bg-primary-tint font-semibold !text-primary-600" @click="activePopover = null"><span>Parser 탐색기</span></router-link>
-        <router-link to="/artifact-tracker" class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink" active-class="bg-primary-tint font-semibold !text-primary-600" @click="activePopover = null"><span>아티팩트 추적</span></router-link>
-        <router-link to="/property-explorer" class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink" active-class="bg-primary-tint font-semibold !text-primary-600" @click="activePopover = null"><span>프로퍼티 추적</span></router-link>
       </div>
 
       <div v-else-if="activePopover === 'project'" class="flex flex-col gap-0.5">
