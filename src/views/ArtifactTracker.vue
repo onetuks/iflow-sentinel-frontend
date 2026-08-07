@@ -45,19 +45,19 @@ const isAllSelected = computed(() => {
 });
 
 const exportToExcel = () => {
-  alert('?�택합니다.��?�을 Excel�정상�보기�니정상');
+  alert('선택한 항목을 Excel로 내보냅니다.');
 };
 
 const deploySelected = () => {
-  alert(`${selectedIds.value.length}개의 정상��정상Deploy ?�니정상`);
+  alert(`${selectedIds.value.length}개의 항목을 Deploy 합니다.`);
 };
 
 const undeploySelected = () => {
-  alert(`${selectedIds.value.length}개의 정상��정상Undeploy ?�니정상`);
+  alert(`${selectedIds.value.length}개의 항목을 Undeploy 합니다.`);
 };
 
 const deleteSelected = () => {
-  alert(`${selectedIds.value.length}개의 정상��합니다.��?�니정상`);
+  alert(`${selectedIds.value.length}개의 항목을 삭제합니다.`);
 };
 </script>
 
@@ -66,8 +66,8 @@ const deleteSelected = () => {
     <!-- Header -->
     <div class="mb-6 flex min-h-[44px] flex-wrap items-center gap-3.5 shrink-0">
       <div>
-        <h1 class="m-0 font-disp text-2xl font-bold tracking-tight">?�티?�트 추적</h1>
-        <div class="mt-1 text-[13px] text-muted">?�넌?�의 ?�티?�트 배포 ?�태�정상�인?�고 관리합?�다</div>
+        <h1 class="m-0 font-disp text-2xl font-bold tracking-tight">아티팩트 추적</h1>
+        <div class="mt-1 text-[13px] text-muted">테넌트의 아티팩트 배포 상태를 확인하고 관리합니다</div>
       </div>
       <div class="ml-auto flex shrink-0 gap-2">
         <button 
@@ -76,14 +76,14 @@ const deleteSelected = () => {
           class="flex items-center gap-1.5 whitespace-nowrap rounded-[11px] border border-line bg-white px-4 py-2.5 text-[13px] font-semibold text-ink shadow-sm transition hover:bg-surface-2 disabled:opacity-50 disabled:hover:bg-white disabled:cursor-not-allowed"
         >
           <Download class="h-[15px] w-[15px]" />
-          Excel ?�보기�기
+          Excel 내보내기
         </button>
       </div>
     </div>
     
     <!-- Tenant Selection -->
     <div class="mb-5 shrink-0">
-      <label class="mb-2 block text-[12.5px] font-semibold text-[#3B4257]">?�넌패키지�택</label>
+      <label class="mb-2 block text-[12.5px] font-semibold text-[#3B4257]">테넌트 선택</label>
       <div class="flex items-center gap-2">
         <button 
           v-for="tenant in tenants" 
@@ -124,7 +124,7 @@ const deleteSelected = () => {
             v-model="statusFilter" 
             class="rounded-[10px] border border-line bg-white px-3 py-1.5 text-[13px] font-medium text-ink focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition cursor-pointer min-w-[120px]"
           >
-            <option value="">모든 ?�태</option>
+            <option value="">모든 상태</option>
             <option value="Deployed">Deployed</option>
             <option value="Undeployed">Undeployed</option>
             <option value="Illusion">Illusion</option>
@@ -134,7 +134,8 @@ const deleteSelected = () => {
         <!-- Actions -->
         <div class="flex items-center gap-2">
           <span v-if="selectedIds.length > 0" class="mr-2 text-[12.5px] font-medium text-primary hidden sm:inline-block">
-            {{ selectedIds.length }}�정상�택정상          </span>
+            {{ selectedIds.length }}개 선택됨
+          </span>
           <button 
             @click="deploySelected"
             :disabled="selectedIds.length === 0"
@@ -184,7 +185,7 @@ const deleteSelected = () => {
           <tbody>
             <tr v-if="filteredArtifacts.length === 0">
               <td colspan="5" class="py-16 text-center text-[13px] text-muted">
-                조건정상맞는 ?�티?�트가 ?�습?�다.
+                조건에 맞는 아티팩트가 없습니다.
               </td>
             </tr>
             <tr 
