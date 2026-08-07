@@ -82,6 +82,41 @@ export interface TrackerArtifact {
   artifact: string;
   runtime: string;
   status: 'Deployed' | 'Undeployed' | 'Illusion';
+  endpointUrl?: string;
+}
+
+/** Data Store 큐에서 Message ID로 조회한 엔트리 결과 (메시지 재처리 기능) */
+export interface DataStoreEntryLookupResult {
+  found: boolean;
+  dataStoreName?: string;
+  entryId?: string;
+  storedAt?: string;
+  sizeBytes?: number;
+  body?: string;
+  contentType?: string;
+  notFoundReason?: string;
+}
+
+/** 메시지 재처리 실행 결과 */
+export interface ReprocessExecutionResult {
+  success: boolean;
+  responseCode?: number;
+  message?: string;
+  executedAt?: string;
+}
+
+/** 메시지 재처리 이력 한 건 */
+export interface ReprocessHistoryEntry {
+  id: number;
+  executedAt: string;
+  tenantName: string;
+  artifactName: string;
+  messageId: string;
+  dataStoreName: string;
+  executedBy: string;
+  result: 'SUCCESS' | 'FAILED';
+  responseCode?: number;
+  responseMessage?: string;
 }
 
 export interface AppRule {

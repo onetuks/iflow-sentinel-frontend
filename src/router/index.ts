@@ -54,6 +54,11 @@ const router = createRouter({
       path: '/property-explorer',
       name: 'PropertyExplorer',
       component: () => import('../views/PropertyExplorer.vue')
+    },
+    {
+      path: '/message-reprocess',
+      name: 'MessageReprocess',
+      component: () => import('../views/MessageReprocess.vue')
     }
   ]
 });
