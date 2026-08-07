@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, provide } from 'vue';
 import Sidebar from './components/Sidebar.vue';
 import Topbar from './components/Topbar.vue';
 import { apiService } from './services/api';
@@ -7,6 +7,9 @@ import { apiService } from './services/api';
 const currentProject = ref('');
 const isSidebarOpen = ref(false); // 모바일 환경 대응
 const projects = ref<any[]>([]);
+
+provide('currentProject', currentProject);
+provide('projects', projects);
 
 const fetchProjects = async () => {
   projects.value = await apiService.getProjects();

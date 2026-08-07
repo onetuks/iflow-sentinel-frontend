@@ -13,7 +13,7 @@ const setExprMode = (val: string) => exprMode.value = val;
 
 import { ref, provide, nextTick, onMounted, watch } from 'vue';
 import ConditionNode, { type ConditionGroup, type ConditionItem, type ActiveFieldKey } from './ConditionNode.vue';
-import FieldPicker, { type FieldPickerArtifact } from './FieldPicker.vue';
+import FieldPicker from './FieldPicker.vue';
 import { getExpressionSchema, type SchemaField, type SubjectField } from '../utils/schemaTree';
 import { apiService } from '../services/api';
 
@@ -32,7 +32,7 @@ const fieldTree = ref<SchemaField[]>([]);
 const subjectFields = ref<SubjectField[]>([]);
 const fieldSchemaLoading = ref(false);
 
-const loadFieldSchema = async (artifactId: string) => {
+const loadFieldSchema = async (_artifactId?: string) => {
   fieldSchemaLoading.value = true;
   try {
     const model = await apiService.getParsedModel(new File([""], "dummy"));

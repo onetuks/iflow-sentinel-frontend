@@ -68,8 +68,8 @@ const getEnvBadgeClass = (tenantName: string) => {
               {{ tenant.name.split(' ').pop() || tenant.name }}
             </span>
             <span class="ml-auto flex items-center gap-1.5 text-[11px] text-muted">
-              <i :class="['h-1.5 w-1.5 rounded-full shadow-[0_0_0_3px]', tenant.status === 'connected' ? 'bg-pass shadow-pass-bg' : 'bg-fail shadow-fail-bg']"></i>
-              {{ tenant.status === 'connected' ? '연결됨' : '오류' }}
+              <i :class="['h-1.5 w-1.5 rounded-full shadow-[0_0_0_3px]', (tenant.status || 'connected') === 'connected' ? 'bg-pass shadow-pass-bg' : 'bg-fail shadow-fail-bg']"></i>
+              {{ (tenant.status || 'connected') === 'connected' ? '연결됨' : '오류' }}
             </span>
           </div>
           <div class="truncate font-disp text-[15px] font-semibold tracking-tight text-ink">
@@ -77,8 +77,8 @@ const getEnvBadgeClass = (tenantName: string) => {
           </div>
           <div class="mb-3.5 truncate font-mono text-[11.5px] text-muted">{{ tenant.odataUrl }}</div>
           <div class="flex items-center justify-between">
-            <span class="flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[11.5px] font-semibold border-pass-line bg-pass-bg text-pass">
-              {{ tenant.status === 'connected' ? '통과' : '보류' }}
+            <span :class="['flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[11.5px] font-semibold', (tenant.status || 'connected') === 'connected' ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail-line bg-fail-bg text-fail']">
+              {{ (tenant.status || 'connected') === 'connected' ? '통과' : '보류' }}
             </span>
             <small class="text-[11px] text-faint">{{ tenant.lastChecked }}</small>
           </div>

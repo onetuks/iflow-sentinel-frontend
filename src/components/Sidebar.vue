@@ -81,7 +81,7 @@ const selectProject = (projectName: string) => {
       </span>
       <div v-if="!isCollapsed" class="min-w-0">
         <b class="font-disp text-base font-bold leading-none tracking-tight truncate block">iFlow Sentinel</b>
-        <small class="mt-[3px] block font-sans text-[11px] font-medium tracking-wide text-faint truncate">규칙 준수 체커</small>
+        <small class="mt-[3px] block font-sans text-[11px] font-medium tracking-wide text-faint truncate">iFlow 관리 도구</small>
       </div>
       <!-- 사이드바 축소/확장 버튼 (데스크탑) -->
       <button v-if="!isCollapsed" class="ml-auto hidden md:block text-faint hover:text-ink transition" @click="isCollapsed = true">

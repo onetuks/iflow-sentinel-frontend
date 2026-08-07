@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, inject, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { Save } from 'lucide-vue-next';
 import { apiService } from '../services/api';
@@ -8,6 +8,15 @@ import type { AppRule } from '../types';
 import YamlPreview from '../components/YamlPreview.vue';
 import RuleList from '../components/RuleList.vue';
 import RuleForm from '../components/RuleForm.vue';
+
+const currentProjectName = inject<any>('currentProject');
+const projectsList = inject<any>('projects');
+
+const currentProjectId = computed(() => {
+  if (!currentProjectName || !projectsList || !projectsList.value) return 1;
+  const p = projectsList.value.find((p: any) => p.name === currentProjectName.value);
+  return p ? p.id : 1;
+});
 
 const scope = ref('global'); // 'global' | 'project'
 const mode = ref('create'); // 'create' | 'edit'
@@ -52,6 +61,14 @@ const editRule = (id: string, isGlobal: boolean) => {
   }
 };
 
+const loadRules = async () => {
+  if (currentProjectId.value) {
+    rules.value = await apiService.getRules(currentProjectId.value);
+  } else {
+    rules.value = [];
+  }
+};
+
 const saveRule = async () => {
   const isGlobal = scope.value === 'global';
   const newRule: AppRule = {
@@ -69,10 +86,10 @@ const saveRule = async () => {
   };
 
   if (mode.value === 'create') {
-    const response = await apiService.createRule(newRule);
+    const response = await apiService.createRule(newRule, currentProjectId.value);
     if (response.status >= 200 && response.status < 300) {
       alert(`[API: createRule] '${newRule.name}' 규칙이 생성되었습니다.`);
-      rules.value = await apiService.getRules();
+      await loadRules();
       mode.value = 'edit';
       currentRuleId.value = newRule.name;
     } else {
@@ -82,7 +99,7 @@ const saveRule = async () => {
     const response = await apiService.updateRule(Number(currentRuleId.value), newRule);
     if (response.status >= 200 && response.status < 300) {
       alert(`[API: updateRule] '${newRule.name}' 규칙이 수정되었습니다.`);
-      rules.value = await apiService.getRules();
+      await loadRules();
     } else {
       alert('규칙 수정에 실패했습니다.');
     }
@@ -90,13 +107,17 @@ const saveRule = async () => {
 };
 
 onMounted(async () => {
-  rules.value = await apiService.getRules();
+  await loadRules();
   
   if (route.query.editId) {
     const editId = route.query.editId as string;
     const isGlobal = route.query.scope === 'global';
     editRule(editId, isGlobal);
   }
+});
+
+watch(currentProjectId, async () => {
+  await loadRules();
 });
 </script>
 

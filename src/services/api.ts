@@ -4,7 +4,6 @@ export type { AppRule, TrackerArtifact } from "../types";
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
-  console.log(API_BASE);
   const response = await fetch(`${API_BASE}${url}`, {
     ...options,
     headers: {
@@ -54,10 +53,41 @@ export const apiService = {
   },
   async getTenants(projectId?: number): Promise<Tenant[]> {
     const url = projectId ? `/tenants?projectId=${projectId}` : '/tenants';
-    return fetchApi<Tenant[]>(url);
+    const tenants = await fetchApi<Tenant[]>(url);
+    return tenants.map(t => ({
+      ...t,
+      status: t.status || 'connected',
+      packageCount: t.packageCount ?? 0
+    }));
   },
-  async testTenantConnection(tenant: Tenant): Promise<{ success: boolean; message: string }> {
-    return fetchApi<any>(`/tenants/${tenant.id}/test-connection`, { method: "POST" });
+  async createTenant(tenant: Partial<Tenant>): Promise<{ status: number; data?: Tenant }> {
+    const r: any = await fetchApi<any>('/tenants', {
+      method: 'POST',
+      body: JSON.stringify(tenant)
+    });
+    return { status: 201, data: r };
+  },
+  async updateTenant(id: number, tenant: Partial<Tenant>): Promise<{ status: number; data?: Tenant }> {
+    const r: any = await fetchApi<any>(`/tenants/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(tenant)
+    });
+    return { status: 200, data: r };
+  },
+  async deleteTenant(id: number): Promise<{ status: number }> {
+    const response = await fetch(`${API_BASE}/tenants/${id}`, {
+      method: 'DELETE'
+    });
+    return { status: response.status };
+  },
+  async testTenantConnection(tenant: Partial<Tenant>): Promise<{ success: boolean; message: string }> {
+    if (tenant.id) {
+      return fetchApi<any>(`/tenants/${tenant.id}/test-connection`, { method: 'POST' });
+    }
+    return fetchApi<any>('/tenants/test-connection', {
+      method: 'POST',
+      body: JSON.stringify(tenant)
+    });
   },
   async getPackages(tenantId: number): Promise<any[]> {
     return fetchApi<any[]>(`/tenants/${tenantId}/packages`);
@@ -116,11 +146,11 @@ export const apiService = {
       ruleMsg: r.message
     }));
   },
-  async createRule(rule: AppRule): Promise<{ status: number; data?: AppRule }> {
+  async createRule(rule: AppRule, projectId?: number): Promise<{ status: number; data?: AppRule }> {
     const payload = {
       ruleKey: rule.name,
       isGlobal: rule.scopeType === 'global',
-      customProjectId: rule.scopeType === 'project' ? 1 : null,
+      customProjectId: rule.scopeType === 'project' ? projectId : null,
       type: rule.ruleType.toUpperCase().replace(/-/g, '_'),
       severity: rule.severity.toUpperCase(),
       target: {},

@@ -21,7 +21,15 @@ const isTesting = ref(false);
 const testResult = ref('');
 const showTenantForm = ref(false);
 const tenantFormMode = ref<'create' | 'edit'>('create');
-const currentTenant = ref({
+const currentTenant = ref<{
+  id?: number;
+  name: string;
+  platformType: string;
+  odataUrl: string;
+  clientId: string;
+  clientSecret: string;
+  tokenUrl: string;
+}>({
   name: '',
   platformType: 'CLOUD_FOUNDRY',
   odataUrl: '',
@@ -103,13 +111,39 @@ const clearSelectedProject = () => {
   showTenantForm.value = false;
 };
 
-const handleTestConnection = () => {
+const handleTestConnection = async () => {
+  if (!currentTenant.value.odataUrl || !currentTenant.value.clientId || !currentTenant.value.tokenUrl) {
+    alert('테스트를 위해 필수 입력값을 모두 채워주세요.');
+    return;
+  }
   isTesting.value = true;
   testResult.value = '확인 중…';
-  setTimeout(() => {
-    testResult.value = 'OAuth2 인증 성공 · 22 패키지 조회됨';
-    isTesting.value = false;
-  }, 900);
+  try {
+    const payload = {
+      id: currentTenant.value.id,
+      projectId: selectedProject.value?.id || 1, // 테스트 용도이므로 기본값 1 또는 현재 프로젝트 ID
+      name: currentTenant.value.name || 'test-tenant',
+      odataUrl: currentTenant.value.odataUrl,
+      clientId: currentTenant.value.clientId,
+      clientSecret: currentTenant.value.clientSecret,
+      tokenUrl: currentTenant.value.tokenUrl,
+      platformType: currentTenant.value.platformType as any,
+      authType: 'OAUTH2_CLIENT_CREDENTIALS' as any
+    };
+    const res = await apiService.testTenantConnection(payload);
+    testResult.value = res.success ? '연결 성공' : '연결 실패';
+  } catch (e) {
+    testResult.value = '연결 오류';
+  }
+  isTesting.value = false;
+};
+
+const getTestResultClass = () => {
+  if (isTesting.value) return '';
+  if (testResult.value.includes('실패') || testResult.value.includes('오류')) {
+    return 'rounded-full border border-fail/30 bg-fail-bg px-2.5 py-1 text-[11.5px] font-semibold text-fail';
+  }
+  return 'rounded-full border border-pass-line bg-pass-bg px-2.5 py-1 text-[11.5px] font-semibold text-pass';
 };
 
 const handleAddTenantClick = () => {
@@ -129,6 +163,7 @@ const handleAddTenantClick = () => {
 const handleEditTenantClick = (tenant: Tenant) => {
   tenantFormMode.value = 'edit';
   currentTenant.value = {
+    id: tenant.id,
     name: tenant.name,
     platformType: tenant.platformType,
     odataUrl: tenant.odataUrl,
@@ -140,33 +175,52 @@ const handleEditTenantClick = (tenant: Tenant) => {
   testResult.value = '';
 };
 
-const handleSaveTenant = () => {
+const handleSaveTenant = async () => {
   if (!selectedProject.value) return;
   
-  if (tenantFormMode.value === 'create') {
-    tenants.value.push({
-      id: Date.now(),
-      projectId: selectedProject.value.id,
-      name: currentTenant.value.name,
-      odataUrl: currentTenant.value.odataUrl,
-      clientId: currentTenant.value.clientId,
-      clientSecret: currentTenant.value.clientSecret,
-      tokenUrl: currentTenant.value.tokenUrl,
-      platformType: currentTenant.value.platformType as any,
-      status: 'connected',
-      packageCount: 0
-    });
-  } else if (tenantFormMode.value === 'edit') {
-    tenants.value.filter(t => t.name === currentTenant.value.name).forEach(t => {
-      t.name = currentTenant.value.name;
-      t.platformType = currentTenant.value.platformType as any;
-      t.odataUrl = currentTenant.value.odataUrl;
-      t.clientId = currentTenant.value.clientId;
-      t.clientSecret = currentTenant.value.clientSecret;
-      t.tokenUrl = currentTenant.value.tokenUrl;
-    });
+  const payload = {
+    projectId: selectedProject.value.id,
+    name: currentTenant.value.name,
+    odataUrl: currentTenant.value.odataUrl,
+    clientId: currentTenant.value.clientId,
+    clientSecret: currentTenant.value.clientSecret,
+    tokenUrl: currentTenant.value.tokenUrl,
+    platformType: currentTenant.value.platformType as any,
+    authType: 'OAUTH2_CLIENT_CREDENTIALS' as any
+  };
+
+  try {
+    if (tenantFormMode.value === 'create') {
+      await apiService.createTenant(payload);
+    } else if (tenantFormMode.value === 'edit' && currentTenant.value.id) {
+      await apiService.updateTenant(currentTenant.value.id, payload);
+    }
+    // Reload tenants
+    tenants.value = await apiService.getTenants(selectedProject.value.id);
+    showTenantForm.value = false;
+  } catch (error: any) {
+    console.error('Failed to save tenant', error);
+    alert(error.message || '테넌트 저장 중 오류가 발생했습니다.');
   }
-  showTenantForm.value = false;
+};
+
+const handleDeleteTenant = async (tenantId: number) => {
+  if (confirm('정말로 이 테넌트를 삭제하시겠습니까?')) {
+    try {
+      const res = await apiService.deleteTenant(tenantId);
+      if (res.status >= 200 && res.status < 300) {
+        tenants.value = tenants.value.filter(t => t.id !== tenantId);
+        if (currentTenant.value.id === tenantId) {
+          showTenantForm.value = false;
+        }
+      } else {
+        alert(`테넌트 삭제에 실패했습니다. (상태 코드: ${res.status})`);
+      }
+    } catch (error) {
+      console.error('Failed to delete tenant:', error);
+      alert('테넌트 삭제 중 오류가 발생했습니다.');
+    }
+  }
 };
 
 const handleCancelTenant = () => {
@@ -269,15 +323,22 @@ const getBadgeClass = (tenant: Tenant) => {
       </div>
 
       <div class="mb-5 grid grid-cols-1 gap-4.5 md:grid-cols-3">
-        <div v-for="tenant in tenants" :key="tenant.id" class="rounded-2xl border border-line bg-surface p-4.5 shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer" @click="handleEditTenantClick(tenant)">
-          <div class="mb-3.5 flex items-center gap-2">
-            <span :class="['rounded-md px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide', getBadgeClass(tenant)]">
-              {{ tenant.name }}
-            </span>
-            <span class="ml-auto flex items-center gap-1.5 text-[11px] text-muted">
-              <i :class="['h-2 w-2 rounded-full shadow-[0_0_0_3px]', tenant.status === 'connected' ? 'bg-pass shadow-pass-bg' : 'bg-fail shadow-fail-bg']"></i>
-              {{ tenant.status === 'connected' ? '정상' : '오류' }}
-            </span>
+        <div v-for="tenant in tenants" :key="tenant.id" class="group rounded-2xl border border-line bg-surface p-4.5 shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer" @click="handleEditTenantClick(tenant)">
+          <div class="mb-3.5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span :class="['rounded-md px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide', getBadgeClass(tenant)]">
+                {{ tenant.name }}
+              </span>
+              <span class="flex items-center gap-1.5 text-[11px] text-muted">
+                <i :class="['h-2 w-2 rounded-full shadow-[0_0_0_3px]', (tenant.status || 'connected') === 'connected' ? 'bg-pass shadow-pass-bg' : 'bg-fail shadow-fail-bg']"></i>
+                {{ (tenant.status || 'connected') === 'connected' ? '정상' : '오류' }}
+              </span>
+            </div>
+            <div class="flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+              <button @click.stop="handleDeleteTenant(tenant.id)" class="rounded p-1.5 text-muted hover:bg-fail-bg hover:text-fail transition" title="삭제">
+                <Trash2 class="h-[14px] w-[14px]" />
+              </button>
+            </div>
           </div>
           <div class="truncate font-mono text-[11.5px] text-muted">{{ tenant.odataUrl }}</div>
           <div class="mt-2.5 font-mono text-[11.5px] text-muted">CF · {{ tenant.packageCount }} 패키지</div>
@@ -328,7 +389,7 @@ const getBadgeClass = (tenant: Tenant) => {
 
           <!-- 액션 버튼 및 테스트 결과 슬롯 -->
           <div class="mb-3.5 mt-2 flex min-h-[34px] items-center text-[12px] font-mono text-muted">
-            <span v-if="testResult" :class="isTesting ? '' : 'rounded-full border border-pass-line bg-pass-bg px-2.5 py-1 text-[11.5px] font-semibold text-pass'">
+            <span v-if="testResult" :class="getTestResultClass()">
               {{ testResult }}
             </span>
           </div>
