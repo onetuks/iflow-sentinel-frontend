@@ -53,6 +53,7 @@ export const apiService = {
   },
   async getTenants(projectId?: number): Promise<Tenant[]> {
     const url = projectId ? `/tenants?projectId=${projectId}` : '/tenants';
+    console.log("url: ", url);
     const tenants = await fetchApi<Tenant[]>(url);
     return tenants.map(t => ({
       ...t,
@@ -61,18 +62,22 @@ export const apiService = {
     }));
   },
   async createTenant(tenant: Partial<Tenant>): Promise<{ status: number; data?: Tenant }> {
-    const r: any = await fetchApi<any>('/tenants', {
+    const response = await fetch(`${API_BASE}/tenants`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(tenant)
     });
-    return { status: 201, data: r };
+    const data = await response.json().catch(() => ({}));
+    return { status: response.status, data };
   },
   async updateTenant(id: number, tenant: Partial<Tenant>): Promise<{ status: number; data?: Tenant }> {
-    const r: any = await fetchApi<any>(`/tenants/${id}`, {
+    const response = await fetch(`${API_BASE}/tenants/${id}`, {
       method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(tenant)
     });
-    return { status: 200, data: r };
+    const data = await response.json().catch(() => ({}));
+    return { status: response.status, data };
   },
   async deleteTenant(id: number): Promise<{ status: number }> {
     const response = await fetch(`${API_BASE}/tenants/${id}`, {

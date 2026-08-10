@@ -38,6 +38,7 @@ const handleProjectChange = (projectName: string) => {
       :projects="projects"
       :is-open="isSidebarOpen"
       @update:project="handleProjectChange"
+      @refresh-projects="fetchProjects"
       @close="isSidebarOpen = false"
     />
     

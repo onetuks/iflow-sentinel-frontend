@@ -9,8 +9,12 @@ import {
   PanelLeftOpen,
   Package,
   Sliders,
-  RefreshCw
+  RefreshCw,
+  Plus,
+  Trash2,
+  Edit2
 } from 'lucide-vue-next';
+import { apiService } from '../services/api';
 
 const props = defineProps<{
   currentProject: string;
@@ -20,6 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:project', projectName: string): void;
+  (e: 'refresh-projects'): void;
   (e: 'close'): void;
 }>();
 
@@ -31,6 +36,61 @@ const isCollapsed = ref(false);
 
 const activePopover = ref<'rulecheck' | 'project' | null>(null);
 const popoverTop = ref(0);
+
+// 프로젝트 생성/수정 모달 상태
+const showProjectModal = ref(false);
+const projectFormMode = ref<'create' | 'edit'>('create');
+const currentProjectInput = ref<{ id: number; name: string }>({ id: 0, name: '' });
+
+const handleAddProject = () => {
+  projectFormMode.value = 'create';
+  currentProjectInput.value = { id: 0, name: '' };
+  showProjectModal.value = true;
+  isMenuOpen.value = false;
+  activePopover.value = null;
+};
+
+const handleEditProject = (e: MouseEvent, pj: any) => {
+  e.stopPropagation();
+  projectFormMode.value = 'edit';
+  currentProjectInput.value = { id: pj.id, name: pj.name };
+  showProjectModal.value = true;
+  isMenuOpen.value = false;
+  activePopover.value = null;
+};
+
+const handleDeleteProject = async (e: MouseEvent, pj: any) => {
+  e.stopPropagation();
+  if (confirm(`정말로 '${pj.name}' 프로젝트를 삭제하시겠습니까?`)) {
+    try {
+      await apiService.deleteProject(pj.id);
+      emit('refresh-projects');
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+      alert('프로젝트 삭제 중 오류가 발생했습니다.');
+    }
+  }
+};
+
+const handleSaveProject = async () => {
+  if (!currentProjectInput.value.name.trim()) return;
+  try {
+    if (projectFormMode.value === 'create') {
+      const res = await apiService.createProject(currentProjectInput.value.name.trim());
+      if (res.data) {
+        emit('update:project', res.data.name);
+      }
+    } else {
+      await apiService.updateProject(currentProjectInput.value.id, currentProjectInput.value.name.trim());
+      emit('update:project', currentProjectInput.value.name.trim());
+    }
+    emit('refresh-projects');
+    showProjectModal.value = false;
+  } catch (err) {
+    console.error('Failed to save project:', err);
+    alert('프로젝트 저장 중 오류가 발생했습니다.');
+  }
+};
 
 const toggleMenu = (e: MouseEvent, menu: 'rulecheck' | 'project') => {
   if (isCollapsed.value) {
@@ -114,21 +174,40 @@ const selectProject = (projectName: string) => {
       <!-- 스위처 메뉴 (팝오버) -->
       <div 
         v-show="!isCollapsed && isMenuOpen" 
-        class="animate-pop absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-xl border border-line-2 bg-surface p-1.5 shadow-lg"
+        class="animate-pop absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-xl border border-line-2 bg-surface p-1.5 shadow-lg max-h-64 overflow-y-auto"
       >
         <div 
           v-for="pj in projects" 
           :key="pj.name"
-          class="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-surface-2"
+          class="flex cursor-pointer items-center justify-between gap-2.5 rounded-lg px-2 py-2 hover:bg-surface-2 group"
           @click="selectProject(pj.name)"
         >
-          <span 
-            class="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md bg-gradient-to-br font-disp text-xs font-bold text-white"
-            :class="pj.gradient"
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span 
+              class="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md bg-gradient-to-br font-disp text-xs font-bold text-white"
+              :class="pj.gradient"
+            >
+              {{ pj.initial }}
+            </span>
+            <b class="font-disp text-[13px] font-semibold truncate">{{ pj.name }}</b>
+          </div>
+          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button @click="handleEditProject($event, pj)" class="p-1 text-faint hover:text-ink rounded" title="수정">
+              <Edit2 class="h-3.5 w-3.5" />
+            </button>
+            <button @click="handleDeleteProject($event, pj)" class="p-1 text-faint hover:text-fail rounded" title="삭제">
+              <Trash2 class="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+        <div class="mt-1 border-t border-line pt-1">
+          <button 
+            @click="handleAddProject" 
+            class="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-2 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-tint"
           >
-            {{ pj.initial }}
-          </span>
-          <b class="font-disp text-[13px] font-semibold">{{ pj.name }}</b>
+            <Plus class="h-3.5 w-3.5" />
+            새 프로젝트 추가
+          </button>
         </div>
       </div>
     </div>
@@ -156,7 +235,7 @@ const selectProject = (projectName: string) => {
         <span v-else class="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary"></span>
       </router-link>
 
-      <!-- 핵심 기능: 기능 단위로 독립된 최상위 메뉴 (더 이상 '아티팩트' 하위로 묶지 않음) -->
+      <!-- 핵심 기능 -->
       <router-link
         to="/artifact-tracker"
         @click="activePopover = null"
@@ -187,8 +266,7 @@ const selectProject = (projectName: string) => {
         <span v-if="!isCollapsed">메시지 재처리</span>
       </router-link>
 
-      <!-- 규칙검사 (후순위): 원래 별도였던 '검사'/'규칙' 그룹과 Parser 탐색기를 통합하고
-           맨 아래로 내려 시각적으로 옅게 표시한다. 항목은 계속 클릭 가능하다. -->
+      <!-- 규칙검사 (후순위) -->
       <div class="mt-3 relative border-t border-line pt-3">
         <button
           @click="toggleMenu($event, 'rulecheck')"
@@ -274,20 +352,64 @@ const selectProject = (projectName: string) => {
         <router-link to="/parser-explorer" class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 font-sans text-[13.5px] font-medium text-muted transition hover:bg-surface-2 hover:text-ink" active-class="bg-primary-tint font-semibold !text-primary-600" @click="activePopover = null"><span>Parser 탐색기</span></router-link>
       </div>
 
-      <div v-else-if="activePopover === 'project'" class="flex flex-col gap-0.5">
+      <div v-else-if="activePopover === 'project'" class="flex flex-col gap-0.5 max-h-64 overflow-y-auto">
         <div 
           v-for="pj in projects" 
           :key="pj.name"
-          class="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-surface-2 transition"
+          class="flex cursor-pointer items-center justify-between gap-2.5 rounded-lg px-2 py-2 hover:bg-surface-2 transition group"
           @click="selectProject(pj.name)"
         >
-          <span 
-            class="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md bg-gradient-to-br font-disp text-xs font-bold text-white"
-            :class="pj.gradient"
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span 
+              class="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md bg-gradient-to-br font-disp text-xs font-bold text-white"
+              :class="pj.gradient"
+            >
+              {{ pj.initial }}
+            </span>
+            <b class="font-disp text-[13px] font-semibold text-ink truncate">{{ pj.name }}</b>
+          </div>
+          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button @click="handleEditProject($event, pj)" class="p-1 text-faint hover:text-ink rounded" title="수정">
+              <Edit2 class="h-3.5 w-3.5" />
+            </button>
+            <button @click="handleDeleteProject($event, pj)" class="p-1 text-faint hover:text-fail rounded" title="삭제">
+              <Trash2 class="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+        <div class="mt-1 border-t border-line pt-1">
+          <button 
+            @click="handleAddProject" 
+            class="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-2 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-tint"
           >
-            {{ pj.initial }}
-          </span>
-          <b class="font-disp text-[13px] font-semibold text-ink">{{ pj.name }}</b>
+            <Plus class="h-3.5 w-3.5" />
+            새 프로젝트 추가
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 프로젝트 추가/수정 모달 -->
+    <div v-if="showProjectModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-4">
+      <div class="w-full max-w-md animate-fade rounded-2xl border border-line bg-surface p-5 shadow-2xl">
+        <h3 class="mb-4 font-disp text-base font-bold text-ink">
+          {{ projectFormMode === 'create' ? '새 프로젝트 추가' : '프로젝트 이름 수정' }}
+        </h3>
+        <input 
+          v-model="currentProjectInput.name" 
+          type="text" 
+          placeholder="프로젝트 이름 입력" 
+          class="mb-4 w-full rounded-xl border border-line-2 bg-surface px-3 py-2.5 text-sm text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+          @keyup.enter="handleSaveProject"
+          autofocus
+        />
+        <div class="flex items-center justify-end gap-2">
+          <button @click="showProjectModal = false" class="rounded-xl border border-line bg-surface px-4 py-2 text-xs font-semibold text-muted transition hover:bg-surface-2">
+            취소
+          </button>
+          <button @click="handleSaveProject" :disabled="!currentProjectInput.name.trim()" class="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:opacity-50">
+            저장
+          </button>
         </div>
       </div>
     </div>

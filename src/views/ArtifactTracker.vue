@@ -1,21 +1,41 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, inject, watch } from 'vue';
 import { Search, Download, Trash2, CloudOff, Play } from 'lucide-vue-next';
 import { apiService } from '../services/api';
 import type { TrackerArtifact } from '../services/api';
 import type { Tenant } from '../types';
 
+const currentProjectName = inject<any>('currentProject');
+const projectsList = inject<any>('projects');
+
+const currentProjectId = computed(() => {
+  if (!currentProjectName || !projectsList || !projectsList.value) return undefined;
+  const p = projectsList.value.find((p: any) => p.name === currentProjectName.value);
+  return p ? p.id : undefined;
+});
+
 const tenants = ref<Tenant[]>([]);
 const activeTenant = ref('');
 const artifacts = ref<TrackerArtifact[]>([]);
 
-onMounted(async () => {
-  const projectId = 1010;
+const loadTenantsAndArtifacts = async () => {
+  const projectId = currentProjectId.value;
   tenants.value = await apiService.getTenants(projectId);
   if (tenants.value.length > 0) {
     activeTenant.value = tenants.value[0].name;
     artifacts.value = await apiService.getTrackerArtifacts(activeTenant.value);
+  } else {
+    activeTenant.value = '';
+    artifacts.value = [];
   }
+};
+
+onMounted(async () => {
+  await loadTenantsAndArtifacts();
+});
+
+watch(currentProjectId, async () => {
+  await loadTenantsAndArtifacts();
 });
 
 const searchQuery = ref('');
