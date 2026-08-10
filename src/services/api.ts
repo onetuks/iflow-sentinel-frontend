@@ -169,6 +169,18 @@ export const apiService = {
       method: 'DELETE'
     });
   },
+  async exportArtifactsExcel(tenantId: number | string, artifactIds?: string[]): Promise<Blob> {
+    let url = `${API_BASE}/tenants/${tenantId}/tracker-artifacts/export`;
+    if (artifactIds && artifactIds.length > 0) {
+      const query = artifactIds.map(id => `artifactIds=${encodeURIComponent(id)}`).join('&');
+      url += `?${query}`;
+    }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Export failed with status: ${response.status}`);
+    }
+    return response.blob();
+  },
   async getParsedModel(file: File): Promise<any> {
     const formData = new FormData();
     formData.append('file', file);

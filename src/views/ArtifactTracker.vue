@@ -157,8 +157,39 @@ const isAllSelected = computed(() => {
   return filteredArtifacts.value.length > 0 && selectedIds.value.length === filteredArtifacts.value.length;
 });
 
-const exportToExcel = () => {
-  alert('선택한 항목을 Excel로 내보냅니다.');
+const isExporting = ref(false);
+
+const exportToExcel = async () => {
+  const currentTenant = tenants.value.find(t => t.name === activeTenant.value);
+  if (!currentTenant || !currentTenant.id) {
+    alert('선택된 테넌트 정보가 없습니다.');
+    return;
+  }
+  const items = getSelectedArtifacts();
+  if (items.length === 0) {
+    alert('내보낼 항목을 1개 이상 선택해 주세요.');
+    return;
+  }
+
+  isExporting.value = true;
+  try {
+    const selectedArtifactIds = items.map(item => String(item.artifactId || item.id));
+    const blob = await apiService.exportArtifactsExcel(currentTenant.id, selectedArtifactIds);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `selected_artifacts_${currentTenant.name}_${dateStr}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  } catch (error: any) {
+    console.error('Failed to export excel:', error);
+    alert('Excel 내보내기 중 오류가 발생했습니다.');
+  } finally {
+    isExporting.value = false;
+  }
 };
 
 const getSelectedArtifacts = () => {
@@ -262,11 +293,11 @@ const deleteSelected = async () => {
       <div class="ml-auto flex shrink-0 gap-2">
         <button 
           @click="exportToExcel"
-          :disabled="selectedIds.length === 0"
+          :disabled="selectedIds.length === 0 || isExporting"
           class="flex items-center gap-1.5 whitespace-nowrap rounded-[11px] border border-line bg-white px-4 py-2.5 text-[13px] font-semibold text-ink shadow-sm transition hover:bg-surface-2 disabled:opacity-50 disabled:hover:bg-white disabled:cursor-not-allowed"
         >
-          <Download class="h-[15px] w-[15px]" />
-          Excel 내보내기
+          <Download :class="['h-[15px] w-[15px]', isExporting ? 'animate-bounce text-primary' : '']" />
+          {{ isExporting ? '내보내는 중...' : 'Excel 내보내기' }}
         </button>
       </div>
     </div>
