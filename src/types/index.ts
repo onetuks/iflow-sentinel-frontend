@@ -77,7 +77,8 @@ export interface Project {
 }
 
 export interface TrackerArtifact {
-  id: number;
+  id: number | string;
+  artifactId: string;
   package: string;
   artifact: string;
   runtime: string;

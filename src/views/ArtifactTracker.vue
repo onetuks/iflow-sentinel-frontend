@@ -106,8 +106,19 @@ watch(activeTenant, async () => {
   await loadArtifacts();
 });
 
-const searchQuery = ref('');
-const statusFilter = ref('');
+const SEARCH_STORAGE_KEY = 'artifact_tracker_search_query';
+const STATUS_STORAGE_KEY = 'artifact_tracker_status_filter';
+
+const searchQuery = ref(sessionStorage.getItem(SEARCH_STORAGE_KEY) || '');
+const statusFilter = ref(sessionStorage.getItem(STATUS_STORAGE_KEY) || '');
+
+watch(searchQuery, (newVal) => {
+  sessionStorage.setItem(SEARCH_STORAGE_KEY, newVal);
+});
+
+watch(statusFilter, (newVal) => {
+  sessionStorage.setItem(STATUS_STORAGE_KEY, newVal);
+});
 
 const filteredArtifacts = computed(() => {
   let result = artifacts.value.filter(a => {
@@ -132,7 +143,7 @@ const filteredArtifacts = computed(() => {
   return result;
 });
 
-const selectedIds = ref<number[]>([]);
+const selectedIds = ref<(number | string)[]>([]);
 
 const toggleSelectAll = () => {
   if (selectedIds.value.length === filteredArtifacts.value.length && filteredArtifacts.value.length > 0) {
@@ -150,16 +161,93 @@ const exportToExcel = () => {
   alert('선택한 항목을 Excel로 내보냅니다.');
 };
 
-const deploySelected = () => {
-  alert(`${selectedIds.value.length}개의 항목을 Deploy 합니다.`);
+const getSelectedArtifacts = () => {
+  return artifacts.value.filter(a => selectedIds.value.includes(a.id));
 };
 
-const undeploySelected = () => {
-  alert(`${selectedIds.value.length}개의 항목을 Undeploy 합니다.`);
+const deploySelected = async () => {
+  const currentTenant = tenants.value.find(t => t.name === activeTenant.value);
+  if (!currentTenant || !currentTenant.id) {
+    alert('선택된 테넌트 정보가 없습니다.');
+    return;
+  }
+  const items = getSelectedArtifacts();
+  if (items.length === 0) return;
+
+  if (!confirm(`선택한 ${items.length}개 아티팩트를 Deploy 하시겠습니까?`)) return;
+
+  isLoading.value = true;
+  try {
+    for (const item of items) {
+      const targetArtifactId = item.artifactId || String(item.id);
+      await apiService.deployTrackerArtifact(currentTenant.id, targetArtifactId);
+    }
+    alert('Deploy 작업이 완료되었습니다. 최신 목록으로 새로고침합니다.');
+    selectedIds.value = [];
+    await loadArtifacts();
+  } catch (error: any) {
+    console.error('Failed to deploy artifacts:', error);
+    alert(`Deploy 작업 중 오류가 발생했습니다:\n${error.message || error}`);
+  } finally {
+    isLoading.value = false;
+  }
 };
 
-const deleteSelected = () => {
-  alert(`${selectedIds.value.length}개의 항목을 삭제합니다.`);
+const undeploySelected = async () => {
+  const currentTenant = tenants.value.find(t => t.name === activeTenant.value);
+  if (!currentTenant || !currentTenant.id) {
+    alert('선택된 테넌트 정보가 없습니다.');
+    return;
+  }
+  const items = getSelectedArtifacts();
+  if (items.length === 0) return;
+
+  if (!confirm(`선택한 ${items.length}개 아티팩트를 Undeploy 하시겠습니까?`)) return;
+
+  isLoading.value = true;
+  try {
+    for (const item of items) {
+      const targetArtifactId = item.artifactId || String(item.id);
+      await apiService.undeployTrackerArtifact(currentTenant.id, targetArtifactId);
+    }
+    alert('Undeploy 작업이 완료되었습니다. 최신 목록으로 새로고침합니다.');
+    selectedIds.value = [];
+    await loadArtifacts();
+  } catch (error: any) {
+    console.error('Failed to undeploy artifacts:', error);
+    alert(`Undeploy 작업 중 오류가 발생했습니다:\n${error.message || error}`);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const deleteSelected = async () => {
+  const currentTenant = tenants.value.find(t => t.name === activeTenant.value);
+  if (!currentTenant || !currentTenant.id) {
+    alert('선택된 테넌트 정보가 없습니다.');
+    return;
+  }
+  const items = getSelectedArtifacts();
+  if (items.length === 0) return;
+
+  if (!confirm(`선택한 ${items.length}개 아티팩트를 정말로 삭제하시겠습니까?`)) return;
+
+  isLoading.value = true;
+  try {
+    for (const item of items) {
+      const targetArtifactId = item.artifactId || String(item.id);
+      const version = item.runtime !== '-' ? item.runtime : '1.0.0';
+      await apiService.deleteTrackerArtifact(currentTenant.id, targetArtifactId, version);
+    }
+    alert('삭제 작업이 완료되었습니다. 최신 목록으로 새로고침합니다.');
+    selectedIds.value = [];
+    await loadArtifacts();
+  } catch (error: any) {
+    console.error('Failed to delete artifacts:', error);
+    alert(`삭제 작업 중 오류가 발생했습니다:\n${error.message || error}`);
+  } finally {
+    isLoading.value = false;
+  }
 };
 </script>
 
@@ -210,66 +298,78 @@ const deleteSelected = () => {
     <!-- Main Content Area (Table & Actions) -->
     <div class="flex flex-col flex-1 rounded-2xl border border-line bg-surface shadow-md overflow-hidden min-h-0">
       <!-- Toolbar -->
-      <div class="flex flex-wrap items-center justify-between border-b border-line px-5 py-3 gap-3 shrink-0 bg-white">
-        <!-- Filters -->
-        <div class="flex items-center gap-3 w-full md:w-auto">
-          <div class="relative w-full md:w-64">
-            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-[15px] w-[15px] text-faint" />
-            <input 
-              v-model="searchQuery" 
-              type="text" 
-              placeholder="패키지 또는 아티팩트 검색" 
-              class="w-full rounded-[10px] border border-line bg-white py-1.5 pl-9 pr-3 text-[13px] text-ink placeholder-faint focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition"
-            />
+      <div class="flex flex-col border-b border-line bg-white shrink-0">
+        <!-- Row 1: Search & Filters -->
+        <div class="flex items-center justify-between border-b border-line/60 px-5 py-2.5 gap-3">
+          <div class="flex items-center gap-3 w-full sm:w-auto">
+            <div class="relative w-full sm:w-64">
+              <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-[15px] w-[15px] text-faint" />
+              <input 
+                v-model="searchQuery" 
+                type="text" 
+                placeholder="패키지 또는 아티팩트 검색" 
+                class="w-full rounded-[10px] border border-line bg-white py-1.5 pl-9 pr-3 text-[13px] text-ink placeholder-faint focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition"
+              />
+            </div>
+            <select 
+              v-model="statusFilter" 
+              class="rounded-[10px] border border-line bg-white px-3 py-1.5 text-[13px] font-medium text-ink focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition cursor-pointer min-w-[120px]"
+            >
+              <option value="">모든 상태</option>
+              <option value="Deployed">Deployed</option>
+              <option value="Undeployed">Undeployed</option>
+              <option value="Illusion">Illusion</option>
+            </select>
           </div>
-          <select 
-            v-model="statusFilter" 
-            class="rounded-[10px] border border-line bg-white px-3 py-1.5 text-[13px] font-medium text-ink focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition cursor-pointer min-w-[120px]"
-          >
-            <option value="">모든 상태</option>
-            <option value="Deployed">Deployed</option>
-            <option value="Undeployed">Undeployed</option>
-            <option value="Illusion">Illusion</option>
-          </select>
         </div>
-        
-        <!-- Actions -->
-        <div class="flex items-center gap-2">
-          <span v-if="selectedIds.length > 0" class="mr-2 text-[12.5px] font-medium text-primary hidden sm:inline-block">
-            {{ selectedIds.length }}개 선택됨
-          </span>
-          <button 
-            @click="syncTenantData"
-            :disabled="!activeTenant || isSyncing"
-            class="flex items-center gap-1.5 rounded-[9px] border border-line-2 bg-surface-2 px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:bg-line-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RotateCw :class="['h-3.5 w-3.5', isSyncing ? 'animate-spin text-primary' : '']" />
-            Tenant 동기화
-          </button>
-          <button 
-            @click="deploySelected"
-            :disabled="selectedIds.length === 0"
-            class="flex items-center gap-1.5 rounded-[9px] bg-pass-bg px-3 py-1.5 text-[12.5px] font-semibold text-pass transition hover:bg-pass-bg/80 border border-pass-line disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Play class="h-3.5 w-3.5" />
-            Deploy
-          </button>
-          <button 
-            @click="undeploySelected"
-            :disabled="selectedIds.length === 0"
-            class="flex items-center gap-1.5 rounded-[9px] bg-warn-bg px-3 py-1.5 text-[12.5px] font-semibold text-warn-line transition hover:bg-warn-bg/80 border border-warn-line disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <CloudOff class="h-3.5 w-3.5" />
-            Undeploy
-          </button>
-          <button 
-            @click="deleteSelected"
-            :disabled="selectedIds.length === 0"
-            class="flex items-center gap-1.5 rounded-[9px] bg-fail-bg px-3 py-1.5 text-[12.5px] font-semibold text-fail transition hover:bg-fail-bg/80 border border-fail-line disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Trash2 class="h-3.5 w-3.5" />
-            Delete
-          </button>
+
+        <!-- Row 2: Selection Tag & Action Buttons (Fixed Position) -->
+        <div class="flex flex-wrap items-center justify-between px-5 py-2.5 gap-3 bg-surface-2/40">
+          <div class="flex items-center gap-2">
+            <span 
+              :class="[
+                'inline-flex items-center rounded-lg px-2.5 py-1 text-[12.5px] font-semibold transition border',
+                selectedIds.length > 0 ? 'bg-primary-tint border-primary/20 text-primary' : 'bg-surface-2 border-line text-muted'
+              ]"
+            >
+              {{ selectedIds.length }}개 선택됨
+            </span>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <button 
+              @click="syncTenantData"
+              :disabled="!activeTenant || isSyncing"
+              class="flex items-center gap-1.5 rounded-[9px] border border-line-2 bg-surface-2 px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:bg-line-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RotateCw :class="['h-3.5 w-3.5', isSyncing ? 'animate-spin text-primary' : '']" />
+              Tenant 동기화
+            </button>
+            <button 
+              @click="deploySelected"
+              :disabled="selectedIds.length === 0"
+              class="flex items-center gap-1.5 rounded-[9px] bg-pass-bg px-3 py-1.5 text-[12.5px] font-semibold text-pass transition hover:bg-pass-bg/80 border border-pass-line disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Play class="h-3.5 w-3.5" />
+              Deploy
+            </button>
+            <button 
+              @click="undeploySelected"
+              :disabled="selectedIds.length === 0"
+              class="flex items-center gap-1.5 rounded-[9px] bg-warn-bg px-3 py-1.5 text-[12.5px] font-semibold text-warn-line transition hover:bg-warn-bg/80 border border-warn-line disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CloudOff class="h-3.5 w-3.5" />
+              Undeploy
+            </button>
+            <button 
+              @click="deleteSelected"
+              :disabled="selectedIds.length === 0"
+              class="flex items-center gap-1.5 rounded-[9px] bg-fail-bg px-3 py-1.5 text-[12.5px] font-semibold text-fail transition hover:bg-fail-bg/80 border border-fail-line disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash2 class="h-3.5 w-3.5" />
+              Delete
+            </button>
+          </div>
         </div>
       </div>
 

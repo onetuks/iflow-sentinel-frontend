@@ -21,7 +21,12 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
     return {} as T;
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text || !text.trim()) {
+    return {} as T;
+  }
+
+  return JSON.parse(text);
 }
 
 export const apiService = {
@@ -133,8 +138,11 @@ export const apiService = {
         else if (st === 'ILLUSION') statusDisplay = 'Illusion';
         else statusDisplay = 'Undeployed';
 
+        const sapId = item.artifactId || String(idx + 1);
+
         return {
-          id: item.artifactId || idx + 1,
+          id: sapId,
+          artifactId: sapId,
           package: item.packageName || item.packageId || '-',
           artifact: item.artifactName || item.artifactId || '-',
           runtime: item.version || item.runtimeStatus || '-',
@@ -145,6 +153,21 @@ export const apiService = {
       console.error('Failed to fetch tracker artifacts:', e);
       return [];
     }
+  },
+  async deployTrackerArtifact(tenantId: number | string, artifactId: string): Promise<void> {
+    await fetchApi<void>(`/tenants/${tenantId}/tracker-artifacts/${encodeURIComponent(artifactId)}/deploy`, {
+      method: 'POST'
+    });
+  },
+  async undeployTrackerArtifact(tenantId: number | string, artifactId: string): Promise<void> {
+    await fetchApi<void>(`/tenants/${tenantId}/tracker-artifacts/${encodeURIComponent(artifactId)}/undeploy`, {
+      method: 'POST'
+    });
+  },
+  async deleteTrackerArtifact(tenantId: number | string, artifactId: string, version: string = '1.0.0'): Promise<void> {
+    await fetchApi<void>(`/tenants/${tenantId}/tracker-artifacts/${encodeURIComponent(artifactId)}?version=${encodeURIComponent(version)}`, {
+      method: 'DELETE'
+    });
   },
   async getParsedModel(file: File): Promise<any> {
     const formData = new FormData();

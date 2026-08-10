@@ -17,7 +17,7 @@ const tenants = ref<Tenant[]>([]);
 const activeTenantId = ref<number | ''>('');
 const allArtifacts = ref<TrackerArtifact[]>([]);
 const selectedPackage = ref('');
-const selectedArtifactId = ref<number | ''>('');
+const selectedArtifactId = ref<number | string | ''>('');
 
 const currentTenant = computed(() => tenants.value.find(t => t.id === activeTenantId.value));
 const isProdTenant = computed(() => (currentTenant.value?.name || '').includes('PRD'));

@@ -10,7 +10,7 @@ const selectedTenantId = ref<number>(1);
 const allArtifacts = ref<TrackerArtifact[]>([]);
 
 const selectedPackage = ref('');
-const selectedArtifact = ref<number | ''>('');
+const selectedArtifact = ref<number | string | ''>('');
 const parameters = ref<any[]>([]);
 
 const currentTenant = computed(() => 
