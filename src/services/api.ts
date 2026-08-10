@@ -85,6 +85,12 @@ export const apiService = {
     });
     return { status: response.status };
   },
+  async syncTenant(id: number): Promise<{ status: number }> {
+    const response = await fetch(`${API_BASE}/tenants/${id}/sync`, {
+      method: 'POST'
+    });
+    return { status: response.status };
+  },
   async testTenantConnection(tenant: Partial<Tenant>): Promise<{ success: boolean; message: string }> {
     if (tenant.id) {
       return fetchApi<any>(`/tenants/${tenant.id}/test-connection`, { method: 'POST' });

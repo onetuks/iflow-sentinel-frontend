@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, inject, watch } from 'vue';
-import { Search, Download, Trash2, CloudOff, Play } from 'lucide-vue-next';
+import { Search, Download, Trash2, CloudOff, Play, RotateCw } from 'lucide-vue-next';
 import { apiService } from '../services/api';
 import type { TrackerArtifact } from '../services/api';
 import type { Tenant } from '../types';
@@ -17,6 +17,7 @@ const currentProjectId = computed(() => {
 const tenants = ref<Tenant[]>([]);
 const activeTenant = ref('');
 const artifacts = ref<TrackerArtifact[]>([]);
+const isSyncing = ref(false);
 
 const loadTenantsAndArtifacts = async () => {
   const projectId = currentProjectId.value;
@@ -24,9 +25,34 @@ const loadTenantsAndArtifacts = async () => {
   if (tenants.value.length > 0) {
     activeTenant.value = tenants.value[0].name;
     artifacts.value = await apiService.getTrackerArtifacts(activeTenant.value);
+    console.log("artifacts", artifacts.value);
   } else {
     activeTenant.value = '';
     artifacts.value = [];
+  }
+};
+
+const syncTenantData = async () => {
+  const currentTenant = tenants.value.find(t => t.name === activeTenant.value);
+  if (!currentTenant || !currentTenant.id) {
+    alert('선택된 테넌트의 ID 정보를 찾을 수 없습니다.');
+    return;
+  }
+
+  isSyncing.value = true;
+  try {
+    const res = await apiService.syncTenant(currentTenant.id);
+    if (res.status >= 200 && res.status < 300) {
+      alert('테넌트의 패키지 및 아티팩트 동기화가 완료되었습니다.');
+      artifacts.value = await apiService.getTrackerArtifacts(activeTenant.value);
+    } else {
+      alert(`동기화에 실패했습니다. (상태 코드: ${res.status})\n백엔드(Spring Boot) 서버를 재시작하였는지 확인해 주세요.`);
+    }
+  } catch (error) {
+    console.error('Failed to sync tenant:', error);
+    alert('테넌트 동기화 중 오류가 발생했습니다.');
+  } finally {
+    isSyncing.value = false;
   }
 };
 
@@ -157,6 +183,14 @@ const deleteSelected = () => {
             {{ selectedIds.length }}개 선택됨
           </span>
           <button 
+            @click="syncTenantData"
+            :disabled="!activeTenant || isSyncing"
+            class="flex items-center gap-1.5 rounded-[9px] border border-line-2 bg-surface-2 px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:bg-line-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RotateCw :class="['h-3.5 w-3.5', isSyncing ? 'animate-spin text-primary' : '']" />
+            Tenant 동기화
+          </button>
+          <button 
             @click="deploySelected"
             :disabled="selectedIds.length === 0"
             class="flex items-center gap-1.5 rounded-[9px] bg-pass-bg px-3 py-1.5 text-[12.5px] font-semibold text-pass transition hover:bg-pass-bg/80 border border-pass-line disabled:opacity-50 disabled:cursor-not-allowed"
@@ -203,12 +237,19 @@ const deleteSelected = () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-if="filteredArtifacts.length === 0">
+            <tr v-if="isSyncing">
+              <td colspan="5" class="py-16 text-center">
+                <div class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+                <div class="mt-2.5 text-[13px] font-medium text-muted">테넌트 패키지 및 아티팩트를 동기화 중입니다...</div>
+              </td>
+            </tr>
+            <tr v-else-if="filteredArtifacts.length === 0">
               <td colspan="5" class="py-16 text-center text-[13px] text-muted">
                 조건에 맞는 아티팩트가 없습니다.
               </td>
             </tr>
             <tr 
+              v-else
               v-for="item in filteredArtifacts" 
               :key="item.id" 
               class="transition hover:bg-surface-2 group border-b border-line/50 last:border-b-0"

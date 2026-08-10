@@ -2,7 +2,7 @@
 import { ref, onMounted, inject, computed, watch } from 'vue';
 import { apiService } from '../services/api';
 import type { Tenant } from '../types';
-import { Plus, Info, TestTube2, Trash2, Edit2 } from 'lucide-vue-next';
+import { Plus, Info, TestTube2, Trash2, Edit2, RotateCw } from 'lucide-vue-next';
 
 // Shared State & Project Context Injected
 const currentProjectName = inject<any>('currentProject');
@@ -18,6 +18,7 @@ const currentProjectTitle = computed(() => currentProjectName?.value || '전체 
 
 const isLoading = ref(true);
 const tenants = ref<Tenant[]>([]);
+const syncingTenantId = ref<number | null>(null);
 
 // --- Tenant Management State ---
 const isTesting = ref(false);
@@ -178,6 +179,24 @@ const handleDeleteTenant = async (tenantId: number) => {
   }
 };
 
+const handleSyncTenant = async (tenantId: number) => {
+  syncingTenantId.value = tenantId;
+  try {
+    const res = await apiService.syncTenant(tenantId);
+    if (res.status >= 200 && res.status < 300) {
+      alert('테넌트의 패키지 및 아티팩트 동기화가 완료되었습니다.');
+      await loadTenants();
+    } else {
+      alert(`테넌트 동기화에 실패했습니다. (상태 코드: ${res.status})`);
+    }
+  } catch (error) {
+    console.error('Failed to sync tenant:', error);
+    alert('테넌트 동기화 중 오류가 발생했습니다.');
+  } finally {
+    syncingTenantId.value = null;
+  }
+};
+
 const handleCancelTenant = () => {
   showTenantForm.value = false;
 };
@@ -243,6 +262,14 @@ const getBadgeClass = (tenant: Tenant) => {
             </span>
           </div>
           <div class="flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+            <button 
+              @click.stop="handleSyncTenant(tenant.id)" 
+              :disabled="syncingTenantId === tenant.id"
+              class="rounded p-1.5 text-muted hover:bg-surface-2 hover:text-primary transition disabled:opacity-50" 
+              title="Tenant 동기화"
+            >
+              <RotateCw :class="['h-[14px] w-[14px]', syncingTenantId === tenant.id ? 'animate-spin text-primary' : '']" />
+            </button>
             <button @click.stop="handleEditTenantClick(tenant)" class="rounded p-1.5 text-muted hover:bg-surface-2 hover:text-primary transition" title="수정">
               <Edit2 class="h-[14px] w-[14px]" />
             </button>
