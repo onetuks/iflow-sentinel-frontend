@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, inject, watch } from 'vue';
-import { Search, Download, Trash2, CloudOff, Play, RotateCw } from 'lucide-vue-next';
+import { Search, Download, Trash2, CloudOff, Play, RotateCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next';
 import { apiService } from '../services/api';
 import type { TrackerArtifact } from '../services/api';
 import type { Tenant } from '../types';
@@ -18,14 +18,51 @@ const tenants = ref<Tenant[]>([]);
 const activeTenant = ref('');
 const artifacts = ref<TrackerArtifact[]>([]);
 const isSyncing = ref(false);
+const isLoading = ref(false);
+
+type SortColumn = 'package' | 'artifact' | 'runtime' | 'status';
+type SortOrder = 'asc' | 'desc';
+
+const sortColumn = ref<SortColumn | null>(null);
+const sortOrder = ref<SortOrder>('asc');
+
+const toggleSort = (col: SortColumn) => {
+  if (sortColumn.value === col) {
+    if (sortOrder.value === 'asc') {
+      sortOrder.value = 'desc';
+    } else {
+      sortColumn.value = null;
+      sortOrder.value = 'asc';
+    }
+  } else {
+    sortColumn.value = col;
+    sortOrder.value = 'asc';
+  }
+};
+
+const loadArtifacts = async () => {
+  const currentTenant = tenants.value.find(t => t.name === activeTenant.value);
+  if (currentTenant && currentTenant.id) {
+    isLoading.value = true;
+    try {
+      artifacts.value = await apiService.getTrackerArtifacts(currentTenant.id);
+    } catch (e) {
+      console.error('Failed to load artifacts:', e);
+      artifacts.value = [];
+    } finally {
+      isLoading.value = false;
+    }
+  } else {
+    artifacts.value = [];
+  }
+};
 
 const loadTenantsAndArtifacts = async () => {
   const projectId = currentProjectId.value;
   tenants.value = await apiService.getTenants(projectId);
   if (tenants.value.length > 0) {
     activeTenant.value = tenants.value[0].name;
-    artifacts.value = await apiService.getTrackerArtifacts(activeTenant.value);
-    console.log("artifacts", artifacts.value);
+    await loadArtifacts();
   } else {
     activeTenant.value = '';
     artifacts.value = [];
@@ -44,7 +81,7 @@ const syncTenantData = async () => {
     const res = await apiService.syncTenant(currentTenant.id);
     if (res.status >= 200 && res.status < 300) {
       alert('테넌트의 패키지 및 아티팩트 동기화가 완료되었습니다.');
-      artifacts.value = await apiService.getTrackerArtifacts(activeTenant.value);
+      await loadArtifacts();
     } else {
       alert(`동기화에 실패했습니다. (상태 코드: ${res.status})\n백엔드(Spring Boot) 서버를 재시작하였는지 확인해 주세요.`);
     }
@@ -64,16 +101,35 @@ watch(currentProjectId, async () => {
   await loadTenantsAndArtifacts();
 });
 
+watch(activeTenant, async () => {
+  selectedIds.value = [];
+  await loadArtifacts();
+});
+
 const searchQuery = ref('');
 const statusFilter = ref('');
 
 const filteredArtifacts = computed(() => {
-  return artifacts.value.filter(a => {
+  let result = artifacts.value.filter(a => {
     const matchQuery = a.package.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
                        a.artifact.toLowerCase().includes(searchQuery.value.toLowerCase());
     const matchStatus = statusFilter.value ? a.status === statusFilter.value : true;
     return matchQuery && matchStatus;
   });
+
+  if (sortColumn.value) {
+    const col = sortColumn.value;
+    const order = sortOrder.value === 'asc' ? 1 : -1;
+    result = [...result].sort((a, b) => {
+      const valA = String(a[col] || '').toLowerCase();
+      const valB = String(b[col] || '').toLowerCase();
+      if (valA < valB) return -1 * order;
+      if (valA > valB) return 1 * order;
+      return 0;
+    });
+  }
+
+  return result;
 });
 
 const selectedIds = ref<number[]>([]);
@@ -230,17 +286,59 @@ const deleteSelected = () => {
                   class="h-4 w-4 rounded border-line text-primary focus:ring-primary cursor-pointer accent-primary"
                 />
               </th>
-              <th class="border-b border-line px-4.5 py-3 text-left text-[11.5px] font-semibold uppercase tracking-wide text-faint">Package</th>
-              <th class="border-b border-line px-4.5 py-3 text-left text-[11.5px] font-semibold uppercase tracking-wide text-faint">Artifact</th>
-              <th class="border-b border-line px-4.5 py-3 text-left text-[11.5px] font-semibold uppercase tracking-wide text-faint">Runtime</th>
-              <th class="border-b border-line px-4.5 py-3 text-center text-[11.5px] font-semibold uppercase tracking-wide text-faint">Status</th>
+              <th 
+                @click="toggleSort('package')"
+                class="border-b border-line px-4.5 py-3 text-left text-[11.5px] font-semibold uppercase tracking-wide text-faint cursor-pointer select-none hover:text-ink transition"
+              >
+                <div class="flex items-center gap-1">
+                  Package
+                  <ArrowUp v-if="sortColumn === 'package' && sortOrder === 'asc'" class="h-3 w-3 text-primary" />
+                  <ArrowDown v-else-if="sortColumn === 'package' && sortOrder === 'desc'" class="h-3 w-3 text-primary" />
+                  <ArrowUpDown v-else class="h-3 w-3 text-faint/50" />
+                </div>
+              </th>
+              <th 
+                @click="toggleSort('artifact')"
+                class="border-b border-line px-4.5 py-3 text-left text-[11.5px] font-semibold uppercase tracking-wide text-faint cursor-pointer select-none hover:text-ink transition"
+              >
+                <div class="flex items-center gap-1">
+                  Artifact
+                  <ArrowUp v-if="sortColumn === 'artifact' && sortOrder === 'asc'" class="h-3 w-3 text-primary" />
+                  <ArrowDown v-else-if="sortColumn === 'artifact' && sortOrder === 'desc'" class="h-3 w-3 text-primary" />
+                  <ArrowUpDown v-else class="h-3 w-3 text-faint/50" />
+                </div>
+              </th>
+              <th 
+                @click="toggleSort('runtime')"
+                class="border-b border-line px-4.5 py-3 text-left text-[11.5px] font-semibold uppercase tracking-wide text-faint cursor-pointer select-none hover:text-ink transition"
+              >
+                <div class="flex items-center gap-1">
+                  Runtime
+                  <ArrowUp v-if="sortColumn === 'runtime' && sortOrder === 'asc'" class="h-3 w-3 text-primary" />
+                  <ArrowDown v-else-if="sortColumn === 'runtime' && sortOrder === 'desc'" class="h-3 w-3 text-primary" />
+                  <ArrowUpDown v-else class="h-3 w-3 text-faint/50" />
+                </div>
+              </th>
+              <th 
+                @click="toggleSort('status')"
+                class="border-b border-line px-4.5 py-3 text-center text-[11.5px] font-semibold uppercase tracking-wide text-faint cursor-pointer select-none hover:text-ink transition"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  Status
+                  <ArrowUp v-if="sortColumn === 'status' && sortOrder === 'asc'" class="h-3 w-3 text-primary" />
+                  <ArrowDown v-else-if="sortColumn === 'status' && sortOrder === 'desc'" class="h-3 w-3 text-primary" />
+                  <ArrowUpDown v-else class="h-3 w-3 text-faint/50" />
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-if="isSyncing">
+            <tr v-if="isLoading || isSyncing">
               <td colspan="5" class="py-16 text-center">
                 <div class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                <div class="mt-2.5 text-[13px] font-medium text-muted">테넌트 패키지 및 아티팩트를 동기화 중입니다...</div>
+                <div class="mt-2.5 text-[13px] font-medium text-muted">
+                  {{ isSyncing ? '테넌트 패키지 및 아티팩트를 동기화 중입니다...' : '아티팩트 목록을 불러오는 중입니다...' }}
+                </div>
               </td>
             </tr>
             <tr v-else-if="filteredArtifacts.length === 0">

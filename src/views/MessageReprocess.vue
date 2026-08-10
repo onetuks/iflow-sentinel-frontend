@@ -40,7 +40,7 @@ const fetchArtifacts = async () => {
   selectedPackage.value = '';
   selectedArtifactId.value = '';
   if (!currentTenant.value) return;
-  allArtifacts.value = await apiService.getTrackerArtifacts(currentTenant.value.name);
+  allArtifacts.value = await apiService.getTrackerArtifacts(currentTenant.value.id);
   if (availablePackages.value.length > 0) {
     selectedPackage.value = availablePackages.value[0];
   }

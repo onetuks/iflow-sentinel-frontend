@@ -122,8 +122,29 @@ export const apiService = {
   async getArtifacts(packageId: number): Promise<IFlow[]> {
     return fetchApi<IFlow[]>(`/packages/${packageId}/artifacts`);
   },
-  async getTrackerArtifacts(_tenantName: string): Promise<TrackerArtifact[]> {
-    return [];
+  async getTrackerArtifacts(tenantId: number | string): Promise<TrackerArtifact[]> {
+    if (!tenantId) return [];
+    try {
+      const data = await fetchApi<any[]>(`/tenants/${tenantId}/tracker-artifacts`);
+      return data.map((item, idx) => {
+        let statusDisplay: 'Deployed' | 'Undeployed' | 'Illusion' = 'Undeployed';
+        const st = (item.status || '').toUpperCase();
+        if (st === 'DEPLOYED') statusDisplay = 'Deployed';
+        else if (st === 'ILLUSION') statusDisplay = 'Illusion';
+        else statusDisplay = 'Undeployed';
+
+        return {
+          id: item.artifactId || idx + 1,
+          package: item.packageName || item.packageId || '-',
+          artifact: item.artifactName || item.artifactId || '-',
+          runtime: item.version || item.runtimeStatus || '-',
+          status: statusDisplay
+        };
+      });
+    } catch (e) {
+      console.error('Failed to fetch tracker artifacts:', e);
+      return [];
+    }
   },
   async getParsedModel(file: File): Promise<any> {
     const formData = new FormData();
