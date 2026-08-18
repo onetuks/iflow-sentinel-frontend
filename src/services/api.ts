@@ -194,8 +194,24 @@ export const apiService = {
     }
     return response.json();
   },
-  async getConfiguredParameters(_tenantName: string, _artifactId: string): Promise<any> {
-    return {};
+  async getConfiguredParameters(tenantId: number | string, artifactId: string, version?: string): Promise<any[]> {
+    if (!tenantId || !artifactId) return [];
+    try {
+      let url = `/tenants/${tenantId}/tracker-artifacts/${encodeURIComponent(artifactId)}/configurations`;
+      if (version) {
+        url += `?version=${encodeURIComponent(version)}`;
+      }
+      const data = await fetchApi<any[]>(url);
+      return (data || []).map(item => ({
+        name: item.name,
+        defaultValue: item.defaultValue || '-',
+        configuredValue: item.configuredValue || '-',
+        dataType: item.dataType || 'xsd:string'
+      }));
+    } catch (e) {
+      console.error('Failed to fetch artifact configurations:', e);
+      return [];
+    }
   },
   // 메시지 재처리: Data Store 큐에서 Message ID로 엔트리(Body 포함)를 조회한다.
   // TODO: 백엔드 Data Store 조회 API 연동 전까지는 스텁으로 항상 '찾을 수 없음'을 반환한다.
