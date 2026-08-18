@@ -138,6 +138,12 @@ const filteredArtifacts = computed(() => {
       if (valA > valB) return 1 * order;
       return 0;
     });
+  } else {
+    result = [...result].sort((a, b) => {
+      const pkgCompare = a.package.localeCompare(b.package, undefined, { sensitivity: 'base', numeric: true });
+      if (pkgCompare !== 0) return pkgCompare;
+      return a.artifact.localeCompare(b.artifact, undefined, { sensitivity: 'base', numeric: true });
+    });
   }
 
   return result;

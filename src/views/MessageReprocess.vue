@@ -37,11 +37,13 @@ const isProdTenant = computed(() => (currentTenant.value?.name || '').includes('
 
 const availablePackages = computed(() => {
   const pkgs = new Set(allArtifacts.value.map(a => a.package));
-  return Array.from(pkgs);
+  return Array.from(pkgs).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }));
 });
 
 const availableArtifacts = computed(() => {
-  return allArtifacts.value.filter(a => a.package === selectedPackage.value);
+  return allArtifacts.value
+    .filter(a => a.package === selectedPackage.value)
+    .sort((a, b) => a.artifact.localeCompare(b.artifact, undefined, { sensitivity: 'base', numeric: true }));
 });
 
 const selectedArtifact = computed(() =>

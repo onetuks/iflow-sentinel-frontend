@@ -79,12 +79,19 @@ watch(activeTenant, async () => {
 });
 
 const filteredArtifacts = computed(() => {
-  if (!searchQuery.value) return artifacts.value;
-  const q = searchQuery.value.toLowerCase();
-  return artifacts.value.filter(a => 
-    a.package.toLowerCase().includes(q) ||
-    a.artifact.toLowerCase().includes(q)
-  );
+  let list = artifacts.value;
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase();
+    list = list.filter(a => 
+      a.package.toLowerCase().includes(q) ||
+      a.artifact.toLowerCase().includes(q)
+    );
+  }
+  return [...list].sort((a, b) => {
+    const pkgCompare = a.package.localeCompare(b.package, undefined, { sensitivity: 'base', numeric: true });
+    if (pkgCompare !== 0) return pkgCompare;
+    return a.artifact.localeCompare(b.artifact, undefined, { sensitivity: 'base', numeric: true });
+  });
 });
 
 // Property 모달 열기

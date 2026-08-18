@@ -172,6 +172,10 @@ export const apiService = {
           queueName,
           expireDays
         };
+      }).sort((a, b) => {
+        const pkgCompare = a.package.localeCompare(b.package, undefined, { sensitivity: 'base', numeric: true });
+        if (pkgCompare !== 0) return pkgCompare;
+        return a.artifact.localeCompare(b.artifact, undefined, { sensitivity: 'base', numeric: true });
       });
     } catch (e) {
       console.error('Failed to fetch tracker artifacts:', e);
