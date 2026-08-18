@@ -241,26 +241,32 @@ const closeModal = () => {
     </div>
 
     <!-- Property Modal -->
-    <div v-if="isModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade">
-      <div class="relative w-full max-w-4xl rounded-2xl border border-line bg-white shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+    <div v-if="isModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 sm:p-6 animate-fade">
+      <div class="relative w-full max-w-6xl rounded-2xl border border-line bg-white shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
         <!-- Modal Header -->
-        <div class="flex items-center justify-between border-b border-line px-6 py-4 bg-surface">
-          <div class="flex items-center gap-2.5">
-            <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-tint text-primary">
+        <div class="flex items-center justify-between border-b border-line px-6 py-4.5 bg-surface/80 backdrop-blur">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-tint text-primary shadow-sm">
               <Sliders class="h-5 w-5" />
             </div>
             <div>
-              <h3 class="m-0 text-[16px] font-bold text-ink">
-                {{ selectedArtifactItem?.artifact }}
-              </h3>
-              <div class="text-[12px] text-muted">
-                패키지: {{ selectedArtifactItem?.package }} | 버전: {{ selectedArtifactItem?.runtime }}
+              <div class="flex items-center gap-2">
+                <h3 class="m-0 text-[16px] font-bold text-ink">
+                  {{ selectedArtifactItem?.artifact }}
+                </h3>
+                <span class="rounded-md bg-surface-2 px-2 py-0.5 font-mono text-[11px] font-semibold text-muted border border-line/60">
+                  v{{ selectedArtifactItem?.runtime }}
+                </span>
+              </div>
+              <div class="text-[12px] text-muted mt-0.5 flex items-center gap-2">
+                <span>패키지: <strong class="text-ink font-medium">{{ selectedArtifactItem?.package }}</strong></span>
               </div>
             </div>
           </div>
           <button 
             @click="closeModal" 
-            class="rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-ink transition"
+            class="rounded-xl p-2 text-muted hover:bg-surface-2 hover:text-ink transition"
+            title="닫기"
           >
             <X class="h-5 w-5" />
           </button>
@@ -278,43 +284,68 @@ const closeModal = () => {
             <div class="text-[14px] font-medium">선택한 아티팩트에 설정된 외부 프로퍼티가 없습니다.</div>
           </div>
 
-          <div v-else class="overflow-x-auto rounded-xl border border-line">
-            <table class="w-full border-collapse">
+          <div v-else class="overflow-x-auto rounded-xl border border-line shadow-sm">
+            <table class="w-full border-collapse table-fixed text-left min-w-[800px]">
               <thead>
-                <tr class="bg-surface border-b border-line">
-                  <th class="px-4 py-3 text-left text-[11.5px] font-semibold uppercase tracking-wide text-faint w-1/4">Name</th>
-                  <th class="px-4 py-3 text-left text-[11.5px] font-semibold uppercase tracking-wide text-faint w-1/4">Default Value</th>
-                  <th class="px-4 py-3 text-left text-[11.5px] font-semibold uppercase tracking-wide text-faint w-1/4">Configured Value</th>
-                  <th class="px-4 py-3 text-left text-[11.5px] font-semibold uppercase tracking-wide text-faint w-1/4">Description</th>
+                <tr class="bg-surface border-b border-line text-[11.5px] font-semibold uppercase tracking-wider text-faint">
+                  <th class="px-4 py-3 w-[26%]">Name</th>
+                  <th class="px-4 py-3 w-[28%]">Default Value</th>
+                  <th class="px-4 py-3 w-[34%]">Configured Value</th>
+                  <th class="px-4 py-3 w-[12%] text-center">Type</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-line/60">
-                <tr v-for="(param, index) in parameters" :key="index" class="hover:bg-surface-2/60 transition">
-                  <td class="px-4 py-3 font-mono text-[12.5px] font-bold text-ink align-middle">
-                    {{ param.name }}
+              <tbody class="divide-y divide-line/60 bg-white">
+                <tr v-for="(param, index) in parameters" :key="index" class="hover:bg-surface-2/50 transition">
+                  <!-- Name -->
+                  <td class="px-4 py-3 align-middle">
+                    <div class="font-mono text-[12.5px] font-bold text-ink break-words [word-break:break-word]">
+                      {{ param.name }}
+                    </div>
                   </td>
-                  <td class="px-4 py-3 text-[12.5px] text-ink break-all align-middle">
-                    {{ param.defaultValue }}
+
+                  <!-- Default Value -->
+                  <td class="px-4 py-3 align-middle">
+                    <div 
+                      v-if="param.defaultValue !== '-'"
+                      class="inline-block max-w-full rounded-md bg-surface-2/70 border border-line/60 px-2.5 py-1 font-mono text-[12px] text-ink break-words [word-break:break-word]"
+                    >
+                      {{ param.defaultValue }}
+                    </div>
+                    <span v-else class="text-faint font-mono text-[12px]">-</span>
                   </td>
-                  <td class="px-4 py-3 text-[12.5px] align-middle break-all">
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                      <span class="font-bold text-primary">{{ param.configuredValue }}</span>
+
+                  <!-- Configured Value -->
+                  <td class="px-4 py-3 align-middle">
+                    <div class="flex items-center justify-between gap-2">
+                      <div 
+                        v-if="param.configuredValue !== '-'"
+                        class="inline-block max-w-full rounded-md bg-primary-tint/30 border border-primary/20 px-2.5 py-1 font-mono text-[12px] font-semibold text-primary break-words [word-break:break-word]"
+                      >
+                        {{ param.configuredValue }}
+                      </div>
+                      <span v-else class="text-faint font-mono text-[12px]">-</span>
+
+                      <!-- Status Badge -->
                       <span 
                         v-if="param.defaultValue !== '-' && param.configuredValue !== '-' && param.defaultValue !== param.configuredValue"
-                        class="inline-flex items-center rounded-md bg-pass-bg border border-pass-line px-1.5 py-0.5 text-[10.5px] font-semibold text-pass"
+                        class="shrink-0 inline-flex items-center rounded-md bg-pass-bg border border-pass-line px-2 py-0.5 text-[10.5px] font-bold text-pass shadow-2xs"
                       >
                         Override
                       </span>
                       <span 
                         v-else-if="param.defaultValue !== '-' && param.configuredValue === param.defaultValue"
-                        class="inline-flex items-center rounded-md bg-surface-2 border border-line px-1.5 py-0.5 text-[10.5px] font-medium text-muted"
+                        class="shrink-0 inline-flex items-center rounded-md bg-surface-2 border border-line px-2 py-0.5 text-[10.5px] font-medium text-muted"
                       >
                         Default
                       </span>
                     </div>
                   </td>
-                  <td class="px-4 py-3 text-[12px] text-muted align-middle">
-                    {{ param.description }}
+
+                  <!-- Type -->
+                  <td class="px-4 py-3 text-center align-middle">
+                    <span class="inline-block rounded bg-surface px-2 py-0.5 font-mono text-[11px] font-medium text-muted border border-line/50">
+                      {{ param.description }}
+                    </span>
                   </td>
                 </tr>
               </tbody>
@@ -323,10 +354,13 @@ const closeModal = () => {
         </div>
 
         <!-- Modal Footer -->
-        <div class="border-t border-line px-6 py-3.5 bg-surface flex justify-end">
+        <div class="border-t border-line px-6 py-3.5 bg-surface flex justify-between items-center">
+          <div class="text-[12px] text-muted">
+            총 <strong class="text-ink">{{ parameters.length }}</strong>개의 프로퍼티 항목
+          </div>
           <button 
             @click="closeModal" 
-            class="rounded-xl border border-line bg-white px-4 py-2 text-[13px] font-semibold text-ink shadow-sm hover:bg-surface-2 transition"
+            class="rounded-xl border border-line bg-white px-5 py-2 text-[13px] font-semibold text-ink shadow-sm hover:bg-surface-2 hover:border-line/80 transition"
           >
             닫기
           </button>
