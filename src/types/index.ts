@@ -76,6 +76,8 @@ export interface Project {
   name: string;
 }
 
+export type ReprocessSupportType = 'NONE' | 'DATASTORE_ONLY' | 'JMS_ONLY' | 'BOTH';
+
 export interface TrackerArtifact {
   id: number | string;
   artifactId: string;
@@ -84,23 +86,55 @@ export interface TrackerArtifact {
   runtime: string;
   status: 'Deployed' | 'Undeployed' | 'Illusion';
   endpointUrl?: string;
+  reprocessType?: ReprocessSupportType;
+  dataStoreName?: string;
+  queueName?: string;
+  expireDays?: number;
 }
 
-/** Data Store 큐에서 Message ID로 조회한 엔트리 결과 (메시지 재처리 기능) */
+/** SAP IS MessageProcessingLogs 최근 실패 로그 */
+export interface MplFailureLog {
+  messageId: string;
+  correlationId: string;
+  status: 'FAILED' | 'ESCALATED' | 'CANCELLED';
+  logStart: string;
+  logEnd: string;
+  errorDetail?: string;
+  customHeader?: string;
+}
+
+/** 테넌트 x 아티팩트 저장소 수동 매핑 설정 */
+export interface StorageMapping {
+  tenantId: number;
+  artifactId: number | string;
+  storageType: 'DATASTORE' | 'JMS';
+  detectedName: string; // 1단계 정적 파싱
+  suggestedName?: string; // 2단계 SAP IS API 추정
+  overrideName?: string; // 3단계 수동 오버라이드
+  confidence: 'HIGH' | 'LOW' | 'MANUAL';
+}
+
+/** Data Store 또는 JMS Queue에서 Message ID로 조회한 엔트리 결과 */
 export interface DataStoreEntryLookupResult {
   found: boolean;
+  storageType?: 'DATASTORE' | 'JMS';
   dataStoreName?: string;
+  queueName?: string;
   entryId?: string;
   storedAt?: string;
   sizeBytes?: number;
   body?: string;
   contentType?: string;
+  expireDays?: number;
+  daysRemaining?: number;
+  isExpired?: boolean;
   notFoundReason?: string;
 }
 
 /** 메시지 재처리 실행 결과 */
 export interface ReprocessExecutionResult {
   success: boolean;
+  storageType?: 'DATASTORE' | 'JMS';
   responseCode?: number;
   message?: string;
   executedAt?: string;
@@ -113,7 +147,8 @@ export interface ReprocessHistoryEntry {
   tenantName: string;
   artifactName: string;
   messageId: string;
-  dataStoreName: string;
+  storageType: 'DATASTORE' | 'JMS';
+  storageName: string;
   executedBy: string;
   result: 'SUCCESS' | 'FAILED';
   responseCode?: number;
