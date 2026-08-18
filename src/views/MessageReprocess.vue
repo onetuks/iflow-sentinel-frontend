@@ -58,8 +58,17 @@ const currentReprocessType = computed<ReprocessSupportType>(() => {
 const targetStorageType = ref<'DATASTORE' | 'JMS'>('DATASTORE');
 
 // 아티팩트 변경 시 저장소 타겟 자동 설정
-watch(selectedArtifact, (newArt) => {
+watch(selectedArtifact, async (newArt) => {
   if (newArt) {
+    try {
+      const type = await apiService.getReprocessSupportType(newArt.id);
+      if (type) {
+        newArt.reprocessType = type;
+      }
+    } catch (e) {
+      // ignore
+    }
+
     if (newArt.reprocessType === 'JMS_ONLY') {
       targetStorageType.value = 'JMS';
     } else {

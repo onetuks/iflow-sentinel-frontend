@@ -80,6 +80,7 @@ export type ReprocessSupportType = 'NONE' | 'DATASTORE_ONLY' | 'JMS_ONLY' | 'BOT
 
 export interface TrackerArtifact {
   id: number | string;
+  dbId?: number;
   artifactId: string;
   package: string;
   artifact: string;

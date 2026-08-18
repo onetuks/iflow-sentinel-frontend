@@ -3,14 +3,44 @@ export type { AppRule, TrackerArtifact, DataStoreEntryLookupResult, ReprocessExe
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
+/** Spring Boot Long 타입 파라미터 요구사항에 맞추어 숫자로 안전 변환하는 헬퍼 함수 */
+function toLongId(val: any): number | undefined {
+  if (val === null || val === undefined || val === '') return undefined;
+  const num = Number(val);
+  if (!isNaN(num)) {
+    return num;
+  }
+  return undefined;
+}
+
 async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${url}`, {
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
+  let response = await fetch(fullUrl, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
     },
   });
+
+  // 404 발생 시 혹시 context-path 중복/누락 문제일 경우 대체 경로 시도
+  if (response.status === 404 && url.startsWith('/reprocess')) {
+    const alternativeUrl = url; // API_BASE 없는 백업 경로
+    try {
+      const altResponse = await fetch(alternativeUrl, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options?.headers,
+        },
+      });
+      if (altResponse.ok) {
+        response = altResponse;
+      }
+    } catch (e) {
+      // ignore fallback error
+    }
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -142,7 +172,8 @@ export const apiService = {
         else if (st === 'ILLUSION') statusDisplay = 'Illusion';
         else statusDisplay = 'Undeployed';
 
-        const sapId = item.artifactId || String(idx + 1);
+        const dbId = typeof item.id === 'number' ? item.id : (typeof item.id === 'string' && !isNaN(Number(item.id)) ? Number(item.id) : undefined);
+        const sapId = item.artifactId || item.id || String(idx + 1);
         const nameUpper = (item.artifactName || item.artifactId || '').toUpperCase();
 
         // 파서 정규화 결과에 따른 재처리 지원 유형 추정 (mocking 및 백엔드 확장 준비)
@@ -161,6 +192,7 @@ export const apiService = {
 
         return {
           id: sapId,
+          dbId: dbId,
           artifactId: sapId,
           package: item.packageName || item.packageId || '-',
           artifact: item.artifactName || item.artifactId || '-',
@@ -242,12 +274,28 @@ export const apiService = {
     }
   },
 
-  // ── 메시지 재처리 관련 API 메서드 ────────────────────────────────
+  // ── 메시지 재처리 (MessageReprocessController API 연동) ────────────
 
-  /** 선택한 아티팩트의 최근 MPL 실패 로그 목록 조회 */
-  async getMplFailureLogs(tenantId: number | string, artifactId: string | number): Promise<MplFailureLog[]> {
+  /** 아티팩트의 재처리 지원 유형 조회 (GET /api/reprocess/artifacts/{artifactId}/support-type) */
+  async getReprocessSupportType(artifactId: number | string): Promise<ReprocessSupportType> {
+    const targetId = toLongId(artifactId) || artifactId;
     try {
-      return await fetchApi<MplFailureLog[]>(`/tenants/${tenantId}/tracker-artifacts/${encodeURIComponent(artifactId)}/mpl-failures`);
+      return await fetchApi<ReprocessSupportType>(`/reprocess/artifacts/${targetId}/support-type`);
+    } catch (e) {
+      return 'DATASTORE_ONLY';
+    }
+  },
+
+  /** 최근 MPL 실패 로그 목록 조회 (GET /api/reprocess/mpl-failures?tenantId={tenantId}&artifactId={artifactId}&top={top}) */
+  async getMplFailureLogs(tenantId: number | string, artifactId?: string | number, top: number = 20): Promise<MplFailureLog[]> {
+    const tId = toLongId(tenantId) || tenantId;
+    const aId = toLongId(artifactId);
+    try {
+      let url = `/reprocess/mpl-failures?tenantId=${tId}&top=${top}`;
+      if (aId !== undefined) {
+        url += `&artifactId=${aId}`;
+      }
+      return await fetchApi<MplFailureLog[]>(url);
     } catch (e) {
       // Mock Fallback
       const now = new Date();
@@ -287,16 +335,34 @@ export const apiService = {
     }
   },
 
-  /** 테넌트 x 아티팩트 저장소 매핑 오버라이드 조회 */
+  /** 저장소 매핑 목록 조회 (GET /api/reprocess/storage-mappings?tenantId={tenantId}&artifactId={artifactId}) */
+  async getStorageMappings(tenantId: number | string, artifactId: string | number): Promise<StorageMapping[]> {
+    const tId = toLongId(tenantId) || tenantId;
+    const aId = toLongId(artifactId) || artifactId;
+    try {
+      return await fetchApi<StorageMapping[]>(`/reprocess/storage-mappings?tenantId=${tId}&artifactId=${aId}`);
+    } catch (e) {
+      return [];
+    }
+  },
+
+  /** 단일 저장소 매핑 조회 (1단계/2단계/3단계 호환 지원) */
   async getStorageMapping(tenantId: number, artifactId: string | number, storageType: 'DATASTORE' | 'JMS'): Promise<StorageMapping> {
+    try {
+      const mappings = await this.getStorageMappings(tenantId, artifactId);
+      const found = mappings.find(m => m.storageType === storageType);
+      if (found) return found;
+    } catch (e) {
+      // ignore
+    }
+
     const key = `${tenantId}_${artifactId}_${storageType}`;
     if (storageMappingStore.has(key)) {
       return storageMappingStore.get(key)!;
     }
-    // 기본 파싱 추정값 반환
     const defaultName = storageType === 'DATASTORE' ? `DS_${artifactId}` : `Q_${artifactId}`;
     return {
-      tenantId,
+      tenantId: Number(tenantId),
       artifactId,
       storageType,
       detectedName: defaultName,
@@ -305,30 +371,65 @@ export const apiService = {
     };
   },
 
-  /** 테넌트 x 아티팩트 저장소 매핑 오버라이드 저장 */
+  /** 저장소 매핑 저장/수정 (PUT /api/reprocess/storage-mappings) */
   async saveStorageMapping(mapping: StorageMapping): Promise<StorageMapping> {
-    const key = `${mapping.tenantId}_${mapping.artifactId}_${mapping.storageType}`;
-    storageMappingStore.set(key, mapping);
-    return mapping;
+    const dto = {
+      tenantId: toLongId(mapping.tenantId) || 1,
+      artifactId: toLongId(mapping.artifactId) || 1,
+      storageType: mapping.storageType,
+      storageName: mapping.overrideName || mapping.suggestedName || mapping.detectedName,
+      expireDays: 90
+    };
+
+    try {
+      const res = await fetchApi<any>(`/reprocess/storage-mappings`, {
+        method: 'PUT',
+        body: JSON.stringify(dto)
+      });
+      return {
+        ...mapping,
+        overrideName: res.storageName || dto.storageName
+      };
+    } catch (e) {
+      // Mock Fallback
+      const key = `${mapping.tenantId}_${mapping.artifactId}_${mapping.storageType}`;
+      storageMappingStore.set(key, mapping);
+      return mapping;
+    }
   },
 
-  /** Data Store 또는 JMS Queue 메시지 ID로 엔트리(Body 포함) 조회 */
+  /** 저장소 매핑 삭제 (DELETE /api/reprocess/storage-mappings?tenantId={tenantId}&artifactId={artifactId}) */
+  async deleteStorageMapping(tenantId: number | string, artifactId: string | number): Promise<void> {
+    const tId = toLongId(tenantId) || tenantId;
+    const aId = toLongId(artifactId) || artifactId;
+    try {
+      await fetchApi<void>(`/reprocess/storage-mappings?tenantId=${tId}&artifactId=${aId}`, {
+        method: 'DELETE'
+      });
+    } catch (e) {
+      console.error('Failed to delete storage mapping:', e);
+    }
+  },
+
+  /** 메시지 Body 조회 (GET /api/reprocess/messages/{messageId}/body?tenantId={tenantId}&artifactId={artifactId}&storageType={storageType}) */
   async lookupDataStoreEntry(
-    tenantId: number,
+    tenantId: number | string,
     artifactId: number | string,
     messageId: string,
     storageType: 'DATASTORE' | 'JMS' = 'DATASTORE'
   ): Promise<DataStoreEntryLookupResult> {
+    const tId = toLongId(tenantId) || 1;
+    const aId = toLongId(artifactId) || 1;
     try {
       return await fetchApi<DataStoreEntryLookupResult>(
-        `/tenants/${tenantId}/tracker-artifacts/${encodeURIComponent(artifactId)}/reprocess-lookup?messageId=${encodeURIComponent(messageId)}&storageType=${storageType}`
+        `/reprocess/messages/${encodeURIComponent(messageId)}/body?tenantId=${tId}&artifactId=${aId}&storageType=${storageType}`
       );
     } catch (e) {
-      // Mock Fallback: 8자리 이상의 ID인 경우 성공으로 시뮬레이션
+      // Mock Fallback
       if (messageId.trim().length >= 8) {
-        const mapping = await this.getStorageMapping(tenantId, artifactId, storageType);
+        const mapping = await this.getStorageMapping(Number(tId), artifactId, storageType);
         const effectiveName = mapping.overrideName || mapping.detectedName;
-        const storedDate = new Date(Date.now() - 2 * 24 * 3600 * 1000); // 2일 전 저장
+        const storedDate = new Date(Date.now() - 2 * 24 * 3600 * 1000);
         const expireDays = 90;
         const daysRemaining = 88;
 
@@ -372,9 +473,9 @@ export const apiService = {
     }
   },
 
-  /** 메시지 재처리 실행 (선택된 Body를 해당 엔드포인트로 재전송) */
+  /** 메시지 재처리 실행 (POST /api/reprocess/execute) */
   async executeReprocess(payload: {
-    tenantId: number;
+    tenantId: number | string;
     artifactId: number | string;
     messageId: string;
     storageType?: 'DATASTORE' | 'JMS';
@@ -382,14 +483,24 @@ export const apiService = {
     tenantName?: string;
     artifactName?: string;
   }): Promise<ReprocessExecutionResult> {
+    const requestBody = {
+      tenantId: toLongId(payload.tenantId) || 1,
+      artifactId: toLongId(payload.artifactId) || 1,
+      messageId: payload.messageId,
+      storageType: payload.storageType || 'DATASTORE',
+      storageName: payload.storageName,
+      tenantName: payload.tenantName,
+      artifactName: payload.artifactName
+    };
+
     try {
-      return await fetchApi<ReprocessExecutionResult>(`/tenants/${payload.tenantId}/reprocess-execute`, {
+      return await fetchApi<ReprocessExecutionResult>(`/reprocess/execute`, {
         method: 'POST',
-        body: JSON.stringify(payload)
+        body: JSON.stringify(requestBody)
       });
     } catch (e) {
       // Mock Fallback
-      const isSuccess = Math.random() > 0.1; // 90% 성공률
+      const isSuccess = Math.random() > 0.1;
       const resultEntry: ReprocessHistoryEntry = {
         id: Date.now(),
         executedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
@@ -416,10 +527,10 @@ export const apiService = {
     }
   },
 
-  /** 메시지 재처리 이력 목록 조회 */
+  /** 메시지 재처리 이력 목록 조회 (GET /api/reprocess/history) */
   async getReprocessHistory(tenantId?: number): Promise<ReprocessHistoryEntry[]> {
     try {
-      const url = tenantId ? `/reprocess-history?tenantId=${tenantId}` : '/reprocess-history';
+      const url = tenantId ? `/reprocess/history?tenantId=${tenantId}` : '/reprocess/history';
       return await fetchApi<ReprocessHistoryEntry[]>(url);
     } catch (e) {
       if (tenantId) {
