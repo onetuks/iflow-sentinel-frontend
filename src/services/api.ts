@@ -178,7 +178,7 @@ export const apiService = {
 
         // 파서 정규화 결과에 따른 재처리 지원 유형 추정 (mocking 및 백엔드 확장 준비)
         let reprocessType: ReprocessSupportType = 'DATASTORE_ONLY';
-        let dataStoreName = item.dataStoreName || `DS_${nameUpper.replace(/[^A-Z0-9_]/g, '_')}`;
+        let dataStoreName = item.dataStoreName || nameUpper.replace(/[^A-Z0-9_]/g, '_');
         let queueName = item.queueName || `Q_${nameUpper.replace(/[^A-Z0-9_]/g, '_')}`;
         let expireDays = item.expireDays || 90;
 
@@ -278,7 +278,8 @@ export const apiService = {
 
   /** 아티팩트의 재처리 지원 유형 조회 (GET /api/reprocess/artifacts/{artifactId}/support-type) */
   async getReprocessSupportType(artifactId: number | string): Promise<ReprocessSupportType> {
-    const targetId = toLongId(artifactId) || artifactId;
+    const targetId = toLongId(artifactId);
+    if (!targetId) return 'DATASTORE_ONLY';
     try {
       return await fetchApi<ReprocessSupportType>(`/reprocess/artifacts/${targetId}/support-type`);
     } catch (e) {
@@ -288,66 +289,60 @@ export const apiService = {
 
   /** 최근 MPL 실패 로그 목록 조회 (GET /api/reprocess/mpl-failures?tenantId={tenantId}&artifactId={artifactId}&top={top}) */
   async getMplFailureLogs(tenantId: number | string, artifactId?: string | number, top: number = 20): Promise<MplFailureLog[]> {
-    const tId = toLongId(tenantId) || tenantId;
-    const aId = toLongId(artifactId);
+    const tId = toLongId(tenantId) || 1;
     try {
       let url = `/reprocess/mpl-failures?tenantId=${tId}&top=${top}`;
-      if (aId !== undefined) {
-        url += `&artifactId=${aId}`;
+      if (artifactId !== undefined && artifactId !== null && String(artifactId).trim() !== '') {
+        url += `&artifactId=${encodeURIComponent(String(artifactId))}`;
       }
-      return await fetchApi<MplFailureLog[]>(url);
+      const rawLogs = await fetchApi<any[]>(url);
+      return (rawLogs || []).map(log => ({
+        messageId: log.messageId,
+        correlationId: log.correlationId || '-',
+        status: log.status || 'FAILED',
+        logStart: typeof log.logStart === 'string' ? log.logStart.replace('T', ' ').substring(0, 19) : (log.logStart || ''),
+        logEnd: typeof log.logEnd === 'string' ? log.logEnd.replace('T', ' ').substring(0, 19) : (log.logEnd || ''),
+        artifactId: log.artifactId,
+        artifactName: log.artifactName,
+        storageName: log.storageName,
+        storageType: log.storageType,
+        expirationStatus: log.expirationStatus,
+        daysUntilExpiration: log.daysUntilExpiration,
+        errorDetail: log.errorDetail || log.lastError || `Status: ${log.status || 'FAILED'}`,
+        customHeader: log.customHeader
+      }));
     } catch (e) {
-      // Mock Fallback
-      const now = new Date();
-      const formatTime = (minusMinutes: number) => {
-        const d = new Date(now.getTime() - minusMinutes * 60 * 1000);
-        return d.toISOString().replace('T', ' ').substring(0, 19);
-      };
-      return [
-        {
-          messageId: `AGRl${Math.random().toString(36).substring(2, 12).toUpperCase()}4423AF68A`,
-          correlationId: `CORR-20260818-${Math.floor(1000 + Math.random() * 9000)}`,
-          status: 'FAILED',
-          logStart: formatTime(25),
-          logEnd: formatTime(24),
-          errorDetail: 'HTTP 500 Internal Server Error: Receiver System Connection Refused',
-          customHeader: 'SAP_SenderSystem: ERP_PRD, SAP_ReceiverSystem: CRM_PRD'
-        },
-        {
-          messageId: `AGRl${Math.random().toString(36).substring(2, 12).toUpperCase()}8819CF12B`,
-          correlationId: `CORR-20260818-${Math.floor(1000 + Math.random() * 9000)}`,
-          status: 'ESCALATED',
-          logStart: formatTime(110),
-          logEnd: formatTime(108),
-          errorDetail: 'DataStore Exception: Entry lock timeout or payload parsing error',
-          customHeader: 'SAP_SenderSystem: MES_PRD, SAP_ReceiverSystem: SAP_IS'
-        },
-        {
-          messageId: `AGRl${Math.random().toString(36).substring(2, 12).toUpperCase()}1120DE99C`,
-          correlationId: `CORR-20260818-${Math.floor(1000 + Math.random() * 9000)}`,
-          status: 'FAILED',
-          logStart: formatTime(240),
-          logEnd: formatTime(238),
-          errorDetail: 'JMS Adapter Exception: Connection reset by peer during queue write',
-          customHeader: 'SAP_SenderSystem: WMS_PRD, SAP_ReceiverSystem: SAP_IS'
-        }
-      ];
+      console.warn('Failed to fetch MPL failure logs from backend:', e);
+      return [];
     }
   },
 
   /** 저장소 매핑 목록 조회 (GET /api/reprocess/storage-mappings?tenantId={tenantId}&artifactId={artifactId}) */
   async getStorageMappings(tenantId: number | string, artifactId: string | number): Promise<StorageMapping[]> {
-    const tId = toLongId(tenantId) || tenantId;
-    const aId = toLongId(artifactId) || artifactId;
+    const tId = toLongId(tenantId) || 1;
+    const aId = toLongId(artifactId) || 1;
     try {
-      return await fetchApi<StorageMapping[]>(`/reprocess/storage-mappings?tenantId=${tId}&artifactId=${aId}`);
+      const dtos = await fetchApi<any[]>(`/reprocess/storage-mappings?tenantId=${tId}&artifactId=${aId}`);
+      return (dtos || []).map(d => ({
+        id: d.id,
+        tenantId: d.tenantId,
+        artifactId: d.artifactId,
+        storageType: d.storageType,
+        storageName: d.storageName,
+        expireDays: d.expireDays,
+        confidenceLevel: d.confidenceLevel,
+        updatedAt: d.updatedAt,
+        overrideName: d.storageName,
+        detectedName: d.storageName,
+        confidence: d.confidenceLevel === 'MANUAL_OVERRIDDEN' ? 'MANUAL' : (d.confidenceLevel === 'AUTO_PARSED' ? 'HIGH' : 'LOW')
+      }));
     } catch (e) {
       return [];
     }
   },
 
-  /** 단일 저장소 매핑 조회 (1단계/2단계/3단계 호환 지원) */
-  async getStorageMapping(tenantId: number, artifactId: string | number, storageType: 'DATASTORE' | 'JMS'): Promise<StorageMapping> {
+  /** 단일 저장소 매핑 조회 */
+  async getStorageMapping(tenantId: number | string, artifactId: string | number, storageType: 'DATASTORE' | 'JMS'): Promise<StorageMapping> {
     try {
       const mappings = await this.getStorageMappings(tenantId, artifactId);
       const found = mappings.find(m => m.storageType === storageType);
@@ -360,11 +355,12 @@ export const apiService = {
     if (storageMappingStore.has(key)) {
       return storageMappingStore.get(key)!;
     }
-    const defaultName = storageType === 'DATASTORE' ? `DS_${artifactId}` : `Q_${artifactId}`;
+    const defaultName = String(artifactId);
     return {
       tenantId: Number(tenantId),
       artifactId,
       storageType,
+      storageName: defaultName,
       detectedName: defaultName,
       suggestedName: `${defaultName}_API_SUGGESTED`,
       confidence: 'HIGH'
@@ -377,8 +373,8 @@ export const apiService = {
       tenantId: toLongId(mapping.tenantId) || 1,
       artifactId: toLongId(mapping.artifactId) || 1,
       storageType: mapping.storageType,
-      storageName: mapping.overrideName || mapping.suggestedName || mapping.detectedName,
-      expireDays: 90
+      storageName: mapping.storageName || mapping.overrideName || mapping.suggestedName || mapping.detectedName,
+      expireDays: mapping.expireDays || 90
     };
 
     try {
@@ -388,7 +384,11 @@ export const apiService = {
       });
       return {
         ...mapping,
-        overrideName: res.storageName || dto.storageName
+        id: res.id,
+        storageName: res.storageName || dto.storageName,
+        overrideName: res.storageName || dto.storageName,
+        expireDays: res.expireDays || dto.expireDays,
+        confidenceLevel: res.confidenceLevel
       };
     } catch (e) {
       // Mock Fallback
@@ -400,8 +400,8 @@ export const apiService = {
 
   /** 저장소 매핑 삭제 (DELETE /api/reprocess/storage-mappings?tenantId={tenantId}&artifactId={artifactId}) */
   async deleteStorageMapping(tenantId: number | string, artifactId: string | number): Promise<void> {
-    const tId = toLongId(tenantId) || tenantId;
-    const aId = toLongId(artifactId) || artifactId;
+    const tId = toLongId(tenantId) || 1;
+    const aId = toLongId(artifactId) || 1;
     try {
       await fetchApi<void>(`/reprocess/storage-mappings?tenantId=${tId}&artifactId=${aId}`, {
         method: 'DELETE'
@@ -411,64 +411,52 @@ export const apiService = {
     }
   },
 
-  /** 메시지 Body 조회 (GET /api/reprocess/messages/{messageId}/body?tenantId={tenantId}&artifactId={artifactId}&storageType={storageType}) */
+  /** 메시지 Body 조회 (GET /api/reprocess/messages/{messageId}/body?tenantId={tenantId}&artifactId={artifactId}&storageType={storageType}&storageName={storageName}) */
   async lookupDataStoreEntry(
     tenantId: number | string,
     artifactId: number | string,
     messageId: string,
-    storageType: 'DATASTORE' | 'JMS' = 'DATASTORE'
+    storageType: 'DATASTORE' | 'JMS' = 'DATASTORE',
+    storageName?: string
   ): Promise<DataStoreEntryLookupResult> {
     const tId = toLongId(tenantId) || 1;
     const aId = toLongId(artifactId) || 1;
     try {
-      return await fetchApi<DataStoreEntryLookupResult>(
-        `/reprocess/messages/${encodeURIComponent(messageId)}/body?tenantId=${tId}&artifactId=${aId}&storageType=${storageType}`
-      );
-    } catch (e) {
-      // Mock Fallback
-      if (messageId.trim().length >= 8) {
-        const mapping = await this.getStorageMapping(Number(tId), artifactId, storageType);
-        const effectiveName = mapping.overrideName || mapping.detectedName;
-        const storedDate = new Date(Date.now() - 2 * 24 * 3600 * 1000);
-        const expireDays = 90;
-        const daysRemaining = 88;
-
-        const sampleBody = storageType === 'DATASTORE'
-          ? `<?xml version="1.0" encoding="UTF-8"?>
-<n0:OrderRequest xmlns:n0="http://sap.com/iflow/sentinel/demo">
-  <Header>
-    <MessageId>${messageId}</MessageId>
-    <Timestamp>${storedDate.toISOString()}</Timestamp>
-    <Sender>ERP_SYSTEM</Sender>
-  </Header>
-  <Item>
-    <MaterialId>MAT-99201</MaterialId>
-    <Quantity>150</Quantity>
-    <UnitPrice>45000</UnitPrice>
-    <Currency>KRW</Currency>
-  </Item>
-</n0:OrderRequest>`
-          : `{\n  "messageId": "${messageId}",\n  "eventType": "JMS_QUEUE_PAYLOAD",\n  "timestamp": "${storedDate.toISOString()}",\n  "payload": {\n    "orderId": "ORD-2026-9901",\n    "status": "QUEUED_FAILURE",\n    "retryCount": 3\n  }\n}`;
-
-        return {
-          found: true,
-          storageType,
-          dataStoreName: storageType === 'DATASTORE' ? effectiveName : undefined,
-          queueName: storageType === 'JMS' ? effectiveName : undefined,
-          entryId: `ENTRY_${messageId.substring(0, 10)}`,
-          storedAt: storedDate.toISOString().replace('T', ' ').substring(0, 19),
-          sizeBytes: sampleBody.length,
-          body: sampleBody,
-          contentType: storageType === 'DATASTORE' ? 'application/xml' : 'application/json',
-          expireDays,
-          daysRemaining,
-          isExpired: false
-        };
+      let url = `/reprocess/messages/${encodeURIComponent(messageId)}/body?tenantId=${tId}&artifactId=${aId}&storageType=${storageType}`;
+      if (storageName) {
+        url += `&storageName=${encodeURIComponent(storageName)}`;
       }
+      const res = await fetchApi<any>(url);
+      
+      const bodyContent = res.messageBody || res.body || '';
+      const isFound = res.messageBody !== null && res.messageBody !== undefined;
+      const fetchedTime = typeof res.fetchedAt === 'string' ? res.fetchedAt.replace('T', ' ').substring(0, 19) : (res.storedAt || '');
+      
+      return {
+        found: isFound,
+        messageId: res.messageId || messageId,
+        storageType: res.storageType || storageType,
+        storageName: res.storageName || storageName,
+        dataStoreName: (res.storageType || storageType) === 'DATASTORE' ? res.storageName : undefined,
+        queueName: (res.storageType || storageType) === 'JMS' ? res.storageName : undefined,
+        entryId: `ENTRY_${messageId.substring(0, 10)}`,
+        storedAt: fetchedTime,
+        fetchedAt: fetchedTime,
+        sizeBytes: bodyContent.length,
+        body: bodyContent,
+        messageBody: bodyContent,
+        contentType: storageType === 'DATASTORE' ? 'application/xml' : 'application/json',
+        expireDays: res.expireDays,
+        daysRemaining: res.daysUntilExpiration ?? res.expireDays,
+        daysUntilExpiration: res.daysUntilExpiration ?? res.expireDays,
+        isExpired: res.isExpired ?? false,
+        deepLinkUrl: res.deepLinkUrl
+      };
+    } catch (e: any) {
       return {
         found: false,
         storageType,
-        notFoundReason: `입력하신 Message ID (${messageId})를 ${storageType === 'DATASTORE' ? 'Data Store' : 'JMS Queue'}에서 찾을 수 없습니다.`
+        notFoundReason: e?.message || `입력하신 Message ID (${messageId})를 ${storageType === 'DATASTORE' ? 'Data Store' : 'JMS Queue'}에서 찾을 수 없습니다.`
       };
     }
   },
@@ -488,41 +476,50 @@ export const apiService = {
       artifactId: toLongId(payload.artifactId) || 1,
       messageId: payload.messageId,
       storageType: payload.storageType || 'DATASTORE',
-      storageName: payload.storageName,
-      tenantName: payload.tenantName,
-      artifactName: payload.artifactName
+      storageName: payload.storageName
     };
 
     try {
-      return await fetchApi<ReprocessExecutionResult>(`/reprocess/execute`, {
+      const res = await fetchApi<any>(`/reprocess/execute`, {
         method: 'POST',
         body: JSON.stringify(requestBody)
       });
-    } catch (e) {
-      // Mock Fallback
-      const isSuccess = Math.random() > 0.1;
+      const execTime = typeof res.reprocessedAt === 'string' ? res.reprocessedAt.replace('T', ' ').substring(0, 19) : (res.executedAt || new Date().toISOString().replace('T', ' ').substring(0, 19));
+      
       const resultEntry: ReprocessHistoryEntry = {
         id: Date.now(),
-        executedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        executedAt: execTime,
         tenantName: payload.tenantName || `Tenant #${payload.tenantId}`,
         artifactName: payload.artifactName || `Artifact #${payload.artifactId}`,
         messageId: payload.messageId,
         storageType: payload.storageType || 'DATASTORE',
-        storageName: payload.storageName || 'DS_DEFAULT',
+        storageName: payload.storageName || String(payload.artifactId),
         executedBy: 'admin@iflow.com',
-        result: isSuccess ? 'SUCCESS' : 'FAILED',
-        responseCode: isSuccess ? 200 : 500,
-        responseMessage: isSuccess ? 'HTTP 200 OK: Reprocessed successfully to iFlow Endpoint' : 'HTTP 500 Internal Error: Connection Reset'
+        result: res.success ? 'SUCCESS' : 'FAILED',
+        responseCode: res.success ? 200 : 500,
+        responseMessage: res.statusMessage || res.message,
+        deepLinkUrl: res.deepLinkUrl
       };
-
       reprocessHistoryStore.unshift(resultEntry);
 
       return {
-        success: isSuccess,
+        success: res.success,
+        messageId: res.messageId || payload.messageId,
+        storageType: res.storageType || payload.storageType || 'DATASTORE',
+        storageName: res.storageName || payload.storageName,
+        responseCode: res.success ? 200 : 500,
+        message: res.statusMessage || res.message || (res.success ? '메시지 재처리가 성공적으로 완료되었습니다.' : '메시지 재처리 실행 중 오류가 발생했습니다.'),
+        statusMessage: res.statusMessage || res.message,
+        executedAt: execTime,
+        reprocessedAt: execTime,
+        deepLinkUrl: res.deepLinkUrl
+      };
+    } catch (e: any) {
+      return {
+        success: false,
         storageType: payload.storageType || 'DATASTORE',
-        responseCode: isSuccess ? 200 : 500,
-        message: isSuccess ? '메시지 재처리가 성공적으로 완료되었습니다. (엔드포인트 200 OK)' : '메시지 재처리 실행 중 타겟 엔드포인트 응답 오류가 발생했습니다.',
-        executedAt: resultEntry.executedAt
+        message: e?.message || '메시지 재처리 실행 중 오류가 발생했습니다.',
+        statusMessage: e?.message || '메시지 재처리 실행 중 오류가 발생했습니다.'
       };
     }
   },
@@ -531,7 +528,24 @@ export const apiService = {
   async getReprocessHistory(tenantId?: number): Promise<ReprocessHistoryEntry[]> {
     try {
       const url = tenantId ? `/reprocess/history?tenantId=${tenantId}` : '/reprocess/history';
-      return await fetchApi<ReprocessHistoryEntry[]>(url);
+      const historyList = await fetchApi<any[]>(url);
+      if (Array.isArray(historyList) && historyList.length > 0) {
+        return historyList.map(h => ({
+          id: h.id || Date.now(),
+          executedAt: typeof h.executedAt === 'string' ? h.executedAt.replace('T', ' ').substring(0, 19) : (h.reprocessedAt || ''),
+          tenantName: h.tenantName || `Tenant #${h.tenantId}`,
+          artifactName: h.artifactName || `Artifact #${h.artifactId}`,
+          messageId: h.messageId,
+          storageType: h.storageType,
+          storageName: h.storageName,
+          executedBy: h.executedBy || 'admin@iflow.com',
+          result: h.result || (h.success ? 'SUCCESS' : 'FAILED'),
+          responseCode: h.responseCode,
+          responseMessage: h.responseMessage || h.statusMessage,
+          deepLinkUrl: h.deepLinkUrl
+        }));
+      }
+      return reprocessHistoryStore;
     } catch (e) {
       if (tenantId) {
         return reprocessHistoryStore.filter(h => h.tenantName.includes(String(tenantId)));

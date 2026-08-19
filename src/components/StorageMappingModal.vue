@@ -31,7 +31,7 @@ const apiCandidates = ref<string[]>([]);
 const loadMapping = async () => {
   if (!props.tenantId || !props.artifactId) return;
   saveSuccess.value = false;
-  detectedName.value = props.defaultDetectedName || (props.storageType === 'DATASTORE' ? `DS_${props.artifactName}` : `Q_${props.artifactName}`);
+  detectedName.value = props.defaultDetectedName || props.artifactName;
 
   const mapping = await apiService.getStorageMapping(props.tenantId, props.artifactId, props.storageType);
   if (mapping.overrideName) {
@@ -46,15 +46,15 @@ const loadMapping = async () => {
   const baseName = props.artifactName.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
   if (props.storageType === 'DATASTORE') {
     apiCandidates.value = [
-      `DS_${baseName}`,
-      `DS_${baseName}_RETRY`,
+      `${baseName}`,
+      `${baseName}_RETRY`,
       `DATASTORE_${baseName}_SHARED`
     ];
   } else {
     apiCandidates.value = [
       `Q_${baseName}_INBOUND`,
       `Q_${baseName}_RETRY`,
-      `JMS_${baseName}_DEAD_LETTER`
+      `${baseName}_DEAD_LETTER`
     ];
   }
   suggestedCandidate.value = apiCandidates.value[0];
@@ -70,33 +70,35 @@ const handleSave = async () => {
   isSaving.value = true;
   saveSuccess.value = false;
   try {
-    let finalOverrideName: string | undefined = undefined;
-    let confidence: 'HIGH' | 'LOW' | 'MANUAL' = 'HIGH';
+    let targetStorageName = detectedName.value;
+    let confidenceLevel: 'AUTO_PARSED' | 'MANUAL_OVERRIDDEN' | 'DEFAULT_FALLBACK' = 'AUTO_PARSED';
 
     if (activeTab.value === 'manual' && customOverride.value.trim()) {
-      finalOverrideName = customOverride.value.trim();
-      confidence = 'MANUAL';
-    } else if (activeTab.value === 'api') {
-      finalOverrideName = suggestedCandidate.value;
-      confidence = 'LOW';
+      targetStorageName = customOverride.value.trim();
+      confidenceLevel = 'MANUAL_OVERRIDDEN';
+    } else if (activeTab.value === 'api' && suggestedCandidate.value.trim()) {
+      targetStorageName = suggestedCandidate.value.trim();
+      confidenceLevel = 'DEFAULT_FALLBACK';
     } else {
-      finalOverrideName = undefined; // 1단계 자동탐지 사용
-      confidence = 'HIGH';
+      targetStorageName = detectedName.value;
+      confidenceLevel = 'AUTO_PARSED';
     }
 
     const payload: StorageMapping = {
       tenantId: props.tenantId,
       artifactId: props.artifactId,
       storageType: props.storageType,
+      storageName: targetStorageName,
+      expireDays: 90,
+      confidenceLevel,
+      overrideName: activeTab.value === 'manual' ? targetStorageName : undefined,
       detectedName: detectedName.value,
-      suggestedName: suggestedCandidate.value,
-      overrideName: finalOverrideName,
-      confidence
+      suggestedName: suggestedCandidate.value
     };
 
     await apiService.saveStorageMapping(payload);
     saveSuccess.value = true;
-    emit('saved', finalOverrideName || detectedName.value);
+    emit('saved', targetStorageName);
 
     setTimeout(() => {
       emit('close');

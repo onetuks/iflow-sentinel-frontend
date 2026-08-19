@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, inject, watch } from 'vue';
 import {
   RefreshCw, Search, AlertTriangle, CheckCircle2, XCircle, History, PlayCircle,
-  Database, Layers, ExternalLink, AlertCircle, Clock, FileText, Check
+  Database, Layers, ExternalLink, AlertCircle, Clock, FileText, Check, Globe
 } from 'lucide-vue-next';
 import { apiService } from '../services/api';
 import type {
@@ -47,7 +47,7 @@ const availableArtifacts = computed(() => {
 });
 
 const selectedArtifact = computed(() =>
-  allArtifacts.value.find(a => a.id === selectedArtifactId.value)
+  allArtifacts.value.find(a => String(a.id) === String(selectedArtifactId.value))
 );
 
 // ── 아티팩트 재처리 지원 유형 및 저장소 정보 ───────────────────
@@ -57,8 +57,14 @@ const currentReprocessType = computed<ReprocessSupportType>(() => {
 
 const targetStorageType = ref<'DATASTORE' | 'JMS'>('DATASTORE');
 
-// 아티팩트 변경 시 저장소 타겟 자동 설정
+// 아티팩트 변경 시 저장소 타겟 자동 설정 및 결과 초기화
 watch(selectedArtifact, async (newArt) => {
+  // 아티팩트 변경 시 기존 조회 결과 및 선택 메시지 초기화
+  selectedMplLog.value = null;
+  messageId.value = '';
+  lookupResult.value = null;
+  executionResult.value = null;
+
   if (newArt) {
     try {
       const type = await apiService.getReprocessSupportType(newArt.id);
@@ -74,7 +80,7 @@ watch(selectedArtifact, async (newArt) => {
     } else {
       targetStorageType.value = 'DATASTORE';
     }
-    fetchMplFailures();
+    await fetchMplFailures();
   }
 });
 
@@ -143,12 +149,32 @@ const mplLogs = ref<MplFailureLog[]>([]);
 const isLoadingMpl = ref(false);
 const selectedMplLog = ref<MplFailureLog | null>(null);
 
+// 조회 모드: 'artifact' (특정 아티팩트별 조회) vs 'tenant_all' (테넌트 전체 실패 전수 조사)
+const searchScopeMode = ref<'artifact' | 'tenant_all'>('artifact');
+
+watch(searchScopeMode, () => {
+  selectedMplLog.value = null;
+  fetchMplFailures();
+});
+
 const fetchMplFailures = async () => {
-  if (!currentTenant.value || !selectedArtifactId.value) return;
+  // 새로운 조건으로 검색 시작 시 기존 목록 및 선택 정보 비우기
+  mplLogs.value = [];
+  selectedMplLog.value = null;
+  messageId.value = '';
+  lookupResult.value = null;
+  executionResult.value = null;
+
+  if (!currentTenant.value) return;
+
   isLoadingMpl.value = true;
   try {
-    mplLogs.value = await apiService.getMplFailureLogs(currentTenant.value.id, selectedArtifactId.value);
-    if (mplLogs.value.length > 0) {
+    const targetArtifactId = searchScopeMode.value === 'tenant_all'
+      ? undefined 
+      : (selectedArtifact.value?.artifactId || selectedArtifact.value?.artifact || selectedArtifactId.value);
+
+    mplLogs.value = await apiService.getMplFailureLogs(currentTenant.value.id, targetArtifactId);
+    if (mplLogs.value.length > 0 && !selectedMplLog.value) {
       selectMplLog(mplLogs.value[0]);
     }
   } finally {
@@ -161,6 +187,20 @@ const selectMplLog = (log: MplFailureLog) => {
   messageId.value = log.messageId;
   lookupResult.value = null;
   executionResult.value = null;
+
+  // 전체 전수 조사 모드이거나 아티팩트 미선택 시, 해당 실패 로그의 아티팩트를 자동 매칭
+  if (log.artifactId && allArtifacts.value.length > 0) {
+    const matched = allArtifacts.value.find(a => 
+      String(a.id) === String(log.artifactId) || 
+      a.artifactId === log.artifactId || 
+      a.artifact === log.artifactId ||
+      false
+    );
+    if (matched) {
+      selectedArtifactId.value = matched.id;
+    }
+  }
+
   // 건 선택 시 자동 조회 수행
   lookupMessage();
 };
@@ -176,12 +216,16 @@ const lookupMessage = async () => {
   if (!canLookup.value || !currentTenant.value || !selectedArtifactId.value) return;
   isLooking.value = true;
   executionResult.value = null;
+  const effectiveStorageName = targetStorageType.value === 'DATASTORE'
+    ? selectedArtifact.value?.dataStoreName
+    : selectedArtifact.value?.queueName;
   try {
     lookupResult.value = await apiService.lookupDataStoreEntry(
       currentTenant.value.id,
-      selectedArtifactId.value,
+      selectedArtifact.value?.dbId || selectedArtifactId.value,
       messageId.value.trim(),
-      targetStorageType.value
+      targetStorageType.value,
+      effectiveStorageName
     );
   } finally {
     isLooking.value = false;
@@ -234,7 +278,7 @@ const executeReprocess = async () => {
 
     executionResult.value = await apiService.executeReprocess({
       tenantId: currentTenant.value.id,
-      artifactId: selectedArtifactId.value,
+      artifactId: selectedArtifact.value?.dbId || selectedArtifactId.value,
       messageId: messageId.value.trim(),
       storageType: targetStorageType.value,
       storageName: effectiveStorageName,
@@ -273,8 +317,12 @@ const envBadgeClass = (tenantName: string) => {
   return 'bg-[#EEF0FE] text-dev';
 };
 
-// SAP IS Web UI Manage Queues 딥링크 이동
+// SAP IS Web UI 딥링크 이동 (백엔드 반환 딥링크 또는 기본 SAP IS URL)
 const openSapIsManageQueues = () => {
+  if (lookupResult.value?.deepLinkUrl) {
+    window.open(lookupResult.value.deepLinkUrl, '_blank');
+    return;
+  }
   if (!currentTenant.value) return;
   const baseUrl = currentTenant.value.odataUrl.replace('/api/v1', '');
   window.open(`${baseUrl}/shell/monitoring/JmsQueues`, '_blank');
@@ -282,7 +330,7 @@ const openSapIsManageQueues = () => {
 </script>
 
 <template>
-  <div class="animate-fade flex flex-col h-[calc(100vh-2rem)]">
+  <div class="animate-fade space-y-5">
     <!-- Header -->
     <div class="mb-5 flex min-h-[44px] flex-wrap items-center justify-between gap-3.5 shrink-0">
       <div>
@@ -323,7 +371,7 @@ const openSapIsManageQueues = () => {
     </div>
 
     <!-- ───────────── 탭 1: 재처리 실행 ───────────── -->
-    <div v-if="activeTab === 'execute'" class="flex-1 overflow-auto space-y-4">
+    <div v-if="activeTab === 'execute'" class="space-y-4">
       <!-- 테넌트 선택 -->
       <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4 shadow-sm">
         <div class="flex items-center gap-3">
@@ -355,9 +403,36 @@ const openSapIsManageQueues = () => {
         </div>
       </div>
 
-      <!-- 아티팩트 선택 & 지원 유형 배지 Card -->
-      <div class="rounded-2xl border border-line bg-surface p-5 shadow-sm space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <!-- 조회 모드 선택 카드 -->
+      <div class="rounded-2xl border border-line bg-surface p-4 shadow-sm space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line/60 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-[12.5px] font-bold text-ink">조회 대상 범위:</span>
+            <div class="flex gap-1.5 rounded-xl bg-surface-2 p-1 border border-line-2">
+              <button
+                @click="searchScopeMode = 'artifact'"
+                :class="[
+                  'flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[12.5px] font-semibold transition',
+                  searchScopeMode === 'artifact' ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-ink'
+                ]"
+              >
+                <Layers class="h-3.5 w-3.5" /> 특정 아티팩트별 조회
+              </button>
+              <button
+                @click="searchScopeMode = 'tenant_all'"
+                :class="[
+                  'flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[12.5px] font-semibold transition',
+                  searchScopeMode === 'tenant_all' ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-ink'
+                ]"
+              >
+                <Globe class="h-3.5 w-3.5" /> 테넌트 전체 실패 메시지 전수 조사
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 모드 1: 아티팩트별 조회 시 패키지/아티팩트 드롭다운 활성화 -->
+        <div v-if="searchScopeMode === 'artifact'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <div class="mb-1.5 flex items-center justify-between">
               <label class="text-[12.5px] font-semibold text-ink">패키지</label>
@@ -431,7 +506,7 @@ const openSapIsManageQueues = () => {
             <!-- 매핑된 저장소 이름 및 변경 버튼 -->
             <div class="mt-2 text-[12px] space-y-1">
               <div v-if="currentReprocessType === 'DATASTORE_ONLY' || currentReprocessType === 'BOTH'" class="flex items-center justify-between">
-                <span class="text-muted font-mono">Store: {{ selectedArtifact.dataStoreName || 'DS_AUTO' }}</span>
+                <span class="text-muted font-mono">Store: {{ selectedArtifact.dataStoreName || selectedArtifact.artifact }}</span>
                 <button @click="openMappingModal('DATASTORE')" class="text-[11px] text-primary underline font-medium hover:text-primary-600">
                   매핑 변경
                 </button>
@@ -446,14 +521,25 @@ const openSapIsManageQueues = () => {
           </div>
         </div>
 
+        <!-- 모드 2: 테넌트 전체 실패 전수 조사 모드 선택 시 안내 패널 (패키지/아티팩트 영역 완전히 제거) -->
+        <div v-else class="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary-tint/60 p-4 text-[13px] text-ink">
+          <Globe class="h-5 w-5 text-primary shrink-0" />
+          <div>
+            <div class="font-bold text-primary-600">테넌트 전체 에러 메시지 전수 조사 모드</div>
+            <div class="text-[12px] text-muted mt-0.5">
+              특정 패키지나 아티팩트 필터 없이 테넌트 전체에서 최근 발생한 모든 실패 메시지(FAILED, ESCALATED, Custom Error)를 수집하여 표시합니다.
+            </div>
+          </div>
+        </div>
+
         <!-- 미지원 안내 -->
-        <div v-if="currentReprocessType === 'NONE'" class="flex items-center gap-2 rounded-xl border border-warn-line bg-warn-bg px-4 py-3 text-[12.5px] text-warn">
+        <div v-if="searchScopeMode === 'artifact' && currentReprocessType === 'NONE'" class="flex items-center gap-2 rounded-xl border border-warn-line bg-warn-bg px-4 py-3 text-[12.5px] text-warn">
           <AlertCircle class="h-4 w-4 shrink-0" />
           <span>선택한 아티팩트는 Data Store 또는 JMS Queue 스텝이 없어 <b>자동 조회가 불가능</b>합니다. MPL 상세 로그에서 원본 Body를 직접 확인해 주세요.</span>
         </div>
 
         <!-- BOTH 타입일 때 저장소 선택 탭 -->
-        <div v-if="currentReprocessType === 'BOTH'" class="flex items-center justify-between border-t border-line/60 pt-3">
+        <div v-if="searchScopeMode === 'artifact' && currentReprocessType === 'BOTH'" class="flex items-center justify-between border-t border-line/60 pt-3">
           <span class="text-[12.5px] font-semibold text-ink">조회 저장소 선택:</span>
           <div class="flex gap-2">
             <button
@@ -479,7 +565,7 @@ const openSapIsManageQueues = () => {
       </div>
 
       <!-- 메시지 선택 (최근 MPL 실패 목록 / 수동 ID 입력) -->
-      <div v-if="currentReprocessType !== 'NONE'" class="rounded-2xl border border-line bg-surface shadow-sm overflow-hidden">
+      <div v-if="searchScopeMode === 'tenant_all' || currentReprocessType !== 'NONE'" class="rounded-2xl border border-line bg-surface shadow-sm overflow-hidden">
         <div class="flex items-center justify-between border-b border-line px-5 py-3 bg-surface-2">
           <div class="flex items-center gap-2">
             <FileText class="h-4 w-4 text-primary" />
@@ -511,11 +597,15 @@ const openSapIsManageQueues = () => {
         <div class="p-5">
           <!-- 모드 1: 최근 MPL 실패 목록 테이블 -->
           <div v-if="selectionMode === 'mpl_list'" class="space-y-3">
-            <div class="flex items-center justify-between text-[12.5px]">
-              <span class="text-muted">SAP IS OData API로 가져온 최근 실패 로그 (행을 클릭하여 지정)</span>
-              <button @click="fetchMplFailures" class="flex items-center gap-1 text-primary text-[12px] font-semibold hover:underline">
-                <RefreshCw class="h-3 w-3" :class="{ 'animate-spin': isLoadingMpl }" /> 새로고침
-              </button>
+            <div class="flex flex-wrap items-center justify-between gap-2 text-[12.5px]">
+              <div class="flex items-center gap-2">
+                <button @click="fetchMplFailures" :disabled="isLoadingMpl" class="flex items-center gap-1 text-primary text-[12px] font-semibold hover:underline disabled:opacity-50">
+                  <RefreshCw class="h-3 w-3" :class="{ 'animate-spin': isLoadingMpl }" /> 새로고침
+                </button>
+                <span v-if="isLoadingMpl" class="text-[11.5px] text-primary font-medium flex items-center gap-1 animate-pulse">
+                  • 새로운 조건으로 실패 메시지 목록을 검색하는 중입니다...
+                </span>
+              </div>
             </div>
 
             <div class="overflow-auto max-h-[220px] rounded-xl border border-line bg-white">
@@ -523,6 +613,7 @@ const openSapIsManageQueues = () => {
                 <thead class="sticky top-0 bg-surface-2 text-faint font-semibold border-b border-line">
                   <tr>
                     <th class="p-2.5">상태</th>
+                    <th class="p-2.5">아티팩트</th>
                     <th class="p-2.5">발생 시각</th>
                     <th class="p-2.5">Message ID</th>
                     <th class="p-2.5">Correlation ID</th>
@@ -531,30 +622,54 @@ const openSapIsManageQueues = () => {
                 </thead>
                 <tbody>
                   <tr v-if="isLoadingMpl">
-                    <td colspan="5" class="py-8 text-center text-muted">MPL 실패 로그 조회 중…</td>
+                    <td colspan="6" class="py-12 text-center text-muted bg-surface-2/20">
+                      <div class="flex flex-col items-center justify-center gap-2.5">
+                        <RefreshCw class="h-6 w-6 animate-spin text-primary" />
+                        <div class="text-[13px] font-semibold text-ink">새로운 조건으로 실패 메시지 목록을 검색하는 중입니다…</div>
+                        <div class="text-[11.5px] text-muted">잠시만 기다려 주세요.</div>
+                      </div>
+                    </td>
                   </tr>
                   <tr v-else-if="mplLogs.length === 0">
-                    <td colspan="5" class="py-8 text-center text-muted">최근 실패한 메시지가 없습니다.</td>
-                  </tr>
-                  <tr
-                    v-for="log in mplLogs"
-                    :key="log.messageId"
-                    @click="selectMplLog(log)"
-                    :class="[
-                      'border-b border-line/60 cursor-pointer transition hover:bg-primary-tint/50',
-                      selectedMplLog?.messageId === log.messageId ? 'bg-primary-tint font-medium text-ink' : ''
-                    ]"
-                  >
-                    <td class="p-2.5">
-                      <span class="rounded-full bg-fail-bg border border-fail-line px-2 py-0.5 text-[10.5px] font-bold text-fail">
-                        {{ log.status }}
-                      </span>
+                    <td colspan="6" class="p-8 text-center text-muted bg-surface-2/40">
+                      <div class="flex flex-col items-center justify-center gap-2">
+                        <div class="rounded-full bg-line-2/40 p-3 text-muted">
+                          <CheckCircle2 class="h-6 w-6 text-pass" />
+                        </div>
+                        <div class="text-[13.5px] font-bold text-ink">최근 7일간 선택 조건에 해당하는 실패 메시지가 없습니다.</div>
+                        <div class="text-[12px] text-faint max-w-md">
+                          (SAP IS OData 실시간 연동 결과: 목(Mock) 데이터가 존재하지 않으며, 실제 SAP IS에 최근 7일 내 기록된 FAILED/ESCALATED 로그가 0건입니다.)
+                        </div>
+                        <div class="mt-1 text-[11.5px] text-primary font-medium">
+                          💡 메시지 ID를 직접 알고 계신 경우 상단 [Message ID 수동 입력] 탭에서 조회가 가능합니다.
+                        </div>
+                      </div>
                     </td>
-                    <td class="p-2.5 font-mono text-muted whitespace-nowrap">{{ log.logStart }}</td>
-                    <td class="p-2.5 font-mono text-ink break-all max-w-[180px]">{{ log.messageId }}</td>
-                    <td class="p-2.5 font-mono text-muted break-all">{{ log.correlationId }}</td>
-                    <td class="p-2.5 text-muted truncate max-w-[200px]">{{ log.errorDetail }}</td>
                   </tr>
+                  <template v-else>
+                    <tr
+                      v-for="log in mplLogs"
+                      :key="log.messageId"
+                      @click="selectMplLog(log)"
+                      :class="[
+                        'border-b border-line/60 cursor-pointer transition hover:bg-primary-tint/50',
+                        selectedMplLog?.messageId === log.messageId ? 'bg-primary-tint font-medium text-ink' : ''
+                      ]"
+                    >
+                      <td class="p-2.5">
+                        <span class="rounded-full bg-fail-bg border border-fail-line px-2 py-0.5 text-[10.5px] font-bold text-fail">
+                          {{ log.status }}
+                        </span>
+                      </td>
+                      <td class="p-2.5 font-mono text-primary font-bold break-all max-w-[150px]" :title="log.artifactId || log.artifactName">
+                        {{ log.artifactId || log.artifactName || '-' }}
+                      </td>
+                      <td class="p-2.5 font-mono text-muted whitespace-nowrap">{{ log.logStart }}</td>
+                      <td class="p-2.5 font-mono text-ink break-all max-w-[180px]">{{ log.messageId }}</td>
+                      <td class="p-2.5 font-mono text-muted break-all">{{ log.correlationId }}</td>
+                      <td class="p-2.5 text-muted truncate max-w-[240px]" :title="log.errorDetail">{{ log.errorDetail || '에러 상세 없음' }}</td>
+                    </tr>
+                  </template>
                 </tbody>
               </table>
             </div>
@@ -574,7 +689,7 @@ const openSapIsManageQueues = () => {
               <button
                 @click="lookupMessage"
                 :disabled="!canLookup || isLooking"
-                class="flex items-center gap-1.5 rounded-[10px] bg-primary px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-primary-600 disabled:opacity-50"
+                class="flex items-center justify-center gap-1.5 rounded-[10px] bg-primary px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-primary-600 disabled:opacity-50 whitespace-nowrap shrink-0"
               >
                 <Search class="h-4 w-4" /> 조회
               </button>
@@ -694,7 +809,7 @@ const openSapIsManageQueues = () => {
     </div>
 
     <!-- ───────────── 탭 2: 재처리 이력 ───────────── -->
-    <div v-else class="flex flex-1 flex-col overflow-hidden space-y-4">
+    <div v-else class="space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div class="flex items-center gap-2">
           <select
@@ -728,8 +843,8 @@ const openSapIsManageQueues = () => {
         </button>
       </div>
 
-      <div class="flex flex-1 flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-sm">
-        <div class="flex-1 overflow-auto bg-white">
+      <div class="rounded-2xl border border-line bg-surface shadow-sm">
+        <div class="bg-white">
           <table class="w-full min-w-[880px] border-collapse text-[12.5px]">
             <thead class="sticky top-0 z-10 bg-surface-2 text-faint font-semibold border-b border-line">
               <tr>

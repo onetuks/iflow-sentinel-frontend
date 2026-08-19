@@ -97,48 +97,71 @@ export interface TrackerArtifact {
 export interface MplFailureLog {
   messageId: string;
   correlationId: string;
-  status: 'FAILED' | 'ESCALATED' | 'CANCELLED';
+  status: 'FAILED' | 'ESCALATED' | 'CANCELLED' | string;
   logStart: string;
   logEnd: string;
+  artifactId?: string;
+  artifactName?: string;
+  storageName?: string;
+  storageType?: string;
+  expirationStatus?: string;
+  daysUntilExpiration?: number;
   errorDetail?: string;
   customHeader?: string;
 }
 
-/** 테넌트 x 아티팩트 저장소 수동 매핑 설정 */
+/** 테넌트 x 아티팩트 저장소 수동 매핑 설정 (Backend StorageMappingDto 규격) */
 export interface StorageMapping {
+  id?: number;
   tenantId: number;
   artifactId: number | string;
   storageType: 'DATASTORE' | 'JMS';
-  detectedName: string; // 1단계 정적 파싱
-  suggestedName?: string; // 2단계 SAP IS API 추정
-  overrideName?: string; // 3단계 수동 오버라이드
-  confidence: 'HIGH' | 'LOW' | 'MANUAL';
+  storageName: string;
+  expireDays?: number;
+  confidenceLevel?: 'AUTO_PARSED' | 'MANUAL_OVERRIDDEN' | 'DEFAULT_FALLBACK';
+  updatedAt?: string;
+  // UI 호환 필드
+  detectedName?: string;
+  suggestedName?: string;
+  overrideName?: string;
+  confidence?: 'HIGH' | 'LOW' | 'MANUAL';
 }
 
-/** Data Store 또는 JMS Queue에서 Message ID로 조회한 엔트리 결과 */
+/** Data Store 또는 JMS Queue에서 Message ID로 조회한 엔트리 결과 (Backend MessageBodyResponse 규격 매핑) */
 export interface DataStoreEntryLookupResult {
   found: boolean;
+  messageId?: string;
   storageType?: 'DATASTORE' | 'JMS';
   dataStoreName?: string;
   queueName?: string;
+  storageName?: string;
   entryId?: string;
   storedAt?: string;
+  fetchedAt?: string;
   sizeBytes?: number;
   body?: string;
+  messageBody?: string;
   contentType?: string;
   expireDays?: number;
   daysRemaining?: number;
+  daysUntilExpiration?: number;
   isExpired?: boolean;
+  deepLinkUrl?: string;
   notFoundReason?: string;
 }
 
-/** 메시지 재처리 실행 결과 */
+/** 메시지 재처리 실행 결과 (Backend MessageReprocessResult 규격 매핑) */
 export interface ReprocessExecutionResult {
   success: boolean;
+  messageId?: string;
   storageType?: 'DATASTORE' | 'JMS';
+  storageName?: string;
   responseCode?: number;
   message?: string;
+  statusMessage?: string;
   executedAt?: string;
+  reprocessedAt?: string;
+  deepLinkUrl?: string;
 }
 
 /** 메시지 재처리 이력 한 건 */
@@ -154,6 +177,7 @@ export interface ReprocessHistoryEntry {
   result: 'SUCCESS' | 'FAILED';
   responseCode?: number;
   responseMessage?: string;
+  deepLinkUrl?: string;
 }
 
 export interface AppRule {
