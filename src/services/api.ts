@@ -423,27 +423,27 @@ export const apiService = {
     const aId = toLongId(artifactId) || 1;
     try {
       let url = `/reprocess/messages/${encodeURIComponent(messageId)}/body?tenantId=${tId}&artifactId=${aId}&storageType=${storageType}`;
-      if (storageName) {
-        url += `&storageName=${encodeURIComponent(storageName)}`;
+      if (storageName && storageName.trim()) {
+        url += `&storageName=${encodeURIComponent(storageName.trim())}`;
       }
       const res = await fetchApi<any>(url);
       
-      const bodyContent = res.messageBody || res.body || '';
-      const isFound = res.messageBody !== null && res.messageBody !== undefined;
-      const fetchedTime = typeof res.fetchedAt === 'string' ? res.fetchedAt.replace('T', ' ').substring(0, 19) : (res.storedAt || '');
+      const bodyContent = res.messageBody ?? res.body ?? res.payload ?? res.content ?? '';
+      const isFound = res.found ?? (res.messageBody !== null && res.messageBody !== undefined) ?? (bodyContent.length > 0);
+      const fetchedTime = typeof res.fetchedAt === 'string' 
+        ? res.fetchedAt.replace('T', ' ').substring(0, 19) 
+        : (typeof res.storedAt === 'string' ? res.storedAt.replace('T', ' ').substring(0, 19) : '');
       
       return {
         found: isFound,
         messageId: res.messageId || messageId,
         storageType: res.storageType || storageType,
         storageName: res.storageName || storageName,
-        dataStoreName: (res.storageType || storageType) === 'DATASTORE' ? res.storageName : undefined,
-        queueName: (res.storageType || storageType) === 'JMS' ? res.storageName : undefined,
-        entryId: `ENTRY_${messageId.substring(0, 10)}`,
+        dataStoreName: (res.storageType || storageType) === 'DATASTORE' ? (res.storageName || storageName) : undefined,
+        queueName: (res.storageType || storageType) === 'JMS' ? (res.storageName || storageName) : undefined,
+        entryId: res.entryId || `ENTRY_${messageId.substring(0, 10)}`,
         storedAt: fetchedTime,
         fetchedAt: fetchedTime,
-        sizeBytes: bodyContent.length,
-        body: bodyContent,
         messageBody: bodyContent,
         contentType: storageType === 'DATASTORE' ? 'application/xml' : 'application/json',
         expireDays: res.expireDays,

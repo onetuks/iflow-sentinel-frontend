@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, inject, watch } from 'vue';
+import { ref, computed, onMounted, inject, watch, nextTick } from 'vue';
 import {
   RefreshCw, Search, AlertTriangle, CheckCircle2, XCircle, History, PlayCircle,
   Database, Layers, ExternalLink, AlertCircle, Clock, FileText, Check, Globe
@@ -57,13 +57,25 @@ const currentReprocessType = computed<ReprocessSupportType>(() => {
 
 const targetStorageType = ref<'DATASTORE' | 'JMS'>('DATASTORE');
 
-// 아티팩트 변경 시 저장소 타겟 자동 설정 및 결과 초기화
-watch(selectedArtifact, async (newArt) => {
-  // 아티팩트 변경 시 기존 조회 결과 및 선택 메시지 초기화
+// 메시지 선택 중 반응형 감시자(Watchers) 연쇄 실행 방지 플래그
+const isSelectingLog = ref(false);
+
+// 실패 로그 관련 모든 상태 즉시 완전 초기화 (조회/조건변경 즉시 목록 제거)
+const clearAllFailureLogsState = () => {
+  mplLogs.value = [];
   selectedMplLog.value = null;
   messageId.value = '';
   lookupResult.value = null;
   executionResult.value = null;
+};
+
+// 아티팩트 변경 시 저장소 타겟 자동 설정 및 결과 초기화 (자동 조회는 안 함)
+watch(selectedArtifact, async (newArt) => {
+  // 메시지 클릭을 통한 자동 매칭일 경우 감시자 연쇄 초기화 및 재조회 방지
+  if (isSelectingLog.value) return;
+
+  // 아티팩트 변경 즉시 기존 조회 결과 및 실패 목록 싹 지우기
+  clearAllFailureLogsState();
 
   if (newArt) {
     try {
@@ -80,7 +92,6 @@ watch(selectedArtifact, async (newArt) => {
     } else {
       targetStorageType.value = 'DATASTORE';
     }
-    await fetchMplFailures();
   }
 });
 
@@ -88,6 +99,7 @@ const fetchArtifacts = async () => {
   allArtifacts.value = [];
   selectedPackage.value = '';
   selectedArtifactId.value = '';
+  clearAllFailureLogsState();
   if (!currentTenant.value) return;
   isLoadingArtifacts.value = true;
   try {
@@ -124,18 +136,15 @@ watch(currentProjectId, async () => {
   await loadTenantsAndArtifacts();
 });
 
-watch(activeTenantId, fetchArtifacts);
-
-watch(selectedPackage, () => {
-  selectedArtifactId.value = availableArtifacts.value.length > 0 ? availableArtifacts.value[0].id : '';
+watch(activeTenantId, async () => {
+  clearAllFailureLogsState();
+  await fetchArtifacts();
 });
 
-// 아티팩트를 바꾸면 이전 조회 및 확정 결과 초기화
-watch(selectedArtifactId, () => {
-  lookupResult.value = null;
-  executionResult.value = null;
-  selectedMplLog.value = null;
-  messageId.value = '';
+watch(selectedPackage, () => {
+  if (isSelectingLog.value) return;
+  clearAllFailureLogsState();
+  selectedArtifactId.value = availableArtifacts.value.length > 0 ? availableArtifacts.value[0].id : '';
 });
 
 onMounted(async () => {
@@ -143,66 +152,107 @@ onMounted(async () => {
   await refreshHistory();
 });
 
-// ── 최근 MPL 실패 목록 자동 조회 & 메시지 선택 ───────────────
+// ── 최근 MPL 실패 목록 수동 조회 & 메시지 선택 ───────────────
 const selectionMode = ref<'mpl_list' | 'manual_id'>('mpl_list');
 const mplLogs = ref<MplFailureLog[]>([]);
 const isLoadingMpl = ref(false);
 const selectedMplLog = ref<MplFailureLog | null>(null);
 
+// 비동기 요청 경쟁 상태(Race Condition) 방지를 위한 시퀀스 ID
+let mplFetchRequestId = 0;
+let lookupRequestId = 0;
+let selectLogRequestId = 0;
+
 // 조회 모드: 'artifact' (특정 아티팩트별 조회) vs 'tenant_all' (테넌트 전체 실패 전수 조사)
 const searchScopeMode = ref<'artifact' | 'tenant_all'>('artifact');
 
 watch(searchScopeMode, () => {
-  selectedMplLog.value = null;
-  fetchMplFailures();
+  clearAllFailureLogsState();
 });
 
 const fetchMplFailures = async () => {
-  // 새로운 조건으로 검색 시작 시 기존 목록 및 선택 정보 비우기
-  mplLogs.value = [];
-  selectedMplLog.value = null;
-  messageId.value = '';
-  lookupResult.value = null;
-  executionResult.value = null;
+  // 요청 시퀀스 카운터 증가 (최신 요청만 화면에 반영하기 위함)
+  const currentRequestId = ++mplFetchRequestId;
 
-  if (!currentTenant.value) return;
-
+  // 1. 새로운 조건으로 검색 시작 시 기존 목록 및 선택 정보 즉시 날리기 & 스피너 활성화
+  clearAllFailureLogsState();
   isLoadingMpl.value = true;
+
+  // 2. Vue DOM 업데이트 및 브라우저 Paint 타임 보장 (Batching 스킵 방지)
+  await nextTick();
+  await new Promise(resolve => setTimeout(resolve, 150));
+
+  if (!currentTenant.value) {
+    isLoadingMpl.value = false;
+    return;
+  }
+
   try {
     const targetArtifactId = searchScopeMode.value === 'tenant_all'
       ? undefined 
       : (selectedArtifact.value?.artifactId || selectedArtifact.value?.artifact || selectedArtifactId.value);
 
-    mplLogs.value = await apiService.getMplFailureLogs(currentTenant.value.id, targetArtifactId);
-    if (mplLogs.value.length > 0 && !selectedMplLog.value) {
-      selectMplLog(mplLogs.value[0]);
-    }
+    const logs = await apiService.getMplFailureLogs(currentTenant.value.id, targetArtifactId);
+
+    // 이전(지연된) 요청의 응답이면 화면 변경 취소/무시
+    if (currentRequestId !== mplFetchRequestId) return;
+
+    mplLogs.value = logs;
+    // (자동 selectMplLog 호출을 제거하여 사용자가 행을 직접 클릭했을 때만 Body 조회가 실행되도록 함)
+  } catch (e) {
+    if (currentRequestId !== mplFetchRequestId) return;
+    console.error('Failed to fetch MPL failure logs:', e);
+    mplLogs.value = [];
   } finally {
-    isLoadingMpl.value = false;
+    if (currentRequestId === mplFetchRequestId) {
+      isLoadingMpl.value = false;
+    }
   }
 };
 
-const selectMplLog = (log: MplFailureLog) => {
-  selectedMplLog.value = log;
-  messageId.value = log.messageId;
-  lookupResult.value = null;
-  executionResult.value = null;
+const selectMplLog = async (log: MplFailureLog, fromFetchRequestId?: number) => {
+  const currentSelectId = ++selectLogRequestId;
 
-  // 전체 전수 조사 모드이거나 아티팩트 미선택 시, 해당 실패 로그의 아티팩트를 자동 매칭
-  if (log.artifactId && allArtifacts.value.length > 0) {
-    const matched = allArtifacts.value.find(a => 
-      String(a.id) === String(log.artifactId) || 
-      a.artifactId === log.artifactId || 
-      a.artifact === log.artifactId ||
-      false
-    );
-    if (matched) {
-      selectedArtifactId.value = matched.id;
-    }
+  // 지연된 이전 fetchMplFailures 요청으로부터 온 경우 전면 무시 (UI 덮어쓰기 방지)
+  if (fromFetchRequestId !== undefined && fromFetchRequestId !== mplFetchRequestId) {
+    return;
   }
 
-  // 건 선택 시 자동 조회 수행
-  lookupMessage();
+  isSelectingLog.value = true;
+  try {
+    selectedMplLog.value = log;
+    messageId.value = log.messageId;
+    lookupResult.value = null;
+    executionResult.value = null;
+
+    // 전체 전수 조사 모드이거나 아티팩트 미선택 시, 해당 실패 로그의 아티팩트를 자동 매칭
+    if (log.artifactId && allArtifacts.value.length > 0) {
+      const matched = allArtifacts.value.find(a => 
+        String(a.id) === String(log.artifactId) || 
+        a.artifactId === log.artifactId || 
+        a.artifact === log.artifactId
+      );
+      if (matched) {
+        // UI 패키지/아티팩트 선택값을 변경하기 직전 최신 요청인지 엄격히 검증
+        if (fromFetchRequestId !== undefined && fromFetchRequestId !== mplFetchRequestId) return;
+        if (currentSelectId !== selectLogRequestId) return;
+
+        if (matched.package && selectedPackage.value !== matched.package) {
+          selectedPackage.value = matched.package;
+        }
+        if (selectedArtifactId.value !== matched.id) {
+          selectedArtifactId.value = matched.id;
+        }
+      }
+    }
+
+    // 특정 실패 로그 클릭 시 서버의 Message Body 조회 API 호출
+    if ((fromFetchRequestId === undefined || fromFetchRequestId === mplFetchRequestId) && currentSelectId === selectLogRequestId) {
+      await lookupMessage();
+    }
+  } finally {
+    isSelectingLog.value = false;
+  }
 };
 
 // ── Message ID & 저장소 조회 ──────────────────────────────────
@@ -210,25 +260,42 @@ const messageId = ref('');
 const isLooking = ref(false);
 const lookupResult = ref<DataStoreEntryLookupResult | null>(null);
 
-const canLookup = computed(() => !!selectedArtifactId.value && messageId.value.trim().length > 0 && currentReprocessType.value !== 'NONE');
+const targetArtifactIdForLookup = computed(() => {
+  return selectedArtifact.value?.dbId || selectedArtifactId.value || selectedMplLog.value?.artifactId;
+});
+
+const canLookup = computed(() => !!targetArtifactIdForLookup.value && messageId.value.trim().length > 0 && currentReprocessType.value !== 'NONE');
 
 const lookupMessage = async () => {
-  if (!canLookup.value || !currentTenant.value || !selectedArtifactId.value) return;
+  if (!canLookup.value || !currentTenant.value || !targetArtifactIdForLookup.value) return;
+  
+  const currentRequestId = ++lookupRequestId;
   isLooking.value = true;
+  lookupResult.value = null;
   executionResult.value = null;
+
   const effectiveStorageName = targetStorageType.value === 'DATASTORE'
     ? selectedArtifact.value?.dataStoreName
     : selectedArtifact.value?.queueName;
   try {
-    lookupResult.value = await apiService.lookupDataStoreEntry(
+    const res = await apiService.lookupDataStoreEntry(
       currentTenant.value.id,
-      selectedArtifact.value?.dbId || selectedArtifactId.value,
+      targetArtifactIdForLookup.value,
       messageId.value.trim(),
       targetStorageType.value,
       effectiveStorageName
     );
+
+    if (currentRequestId !== lookupRequestId) return;
+    lookupResult.value = res;
+  } catch (e) {
+    if (currentRequestId !== lookupRequestId) return;
+    console.error('Lookup failed:', e);
+    lookupResult.value = null;
   } finally {
-    isLooking.value = false;
+    if (currentRequestId === lookupRequestId) {
+      isLooking.value = false;
+    }
   }
 };
 
@@ -562,6 +629,24 @@ const openSapIsManageQueues = () => {
             </button>
           </div>
         </div>
+
+        <!-- 실패 로그 수동 조회 트리거 버튼 영역 -->
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line/60 pt-3">
+          <div class="text-[12px] text-muted flex items-center gap-1.5">
+            <Search class="h-3.5 w-3.5 text-primary" />
+            <span v-if="searchScopeMode === 'artifact'">선택한 패키지 및 아티팩트 조건으로 최근 실패 메시지를 조회합니다.</span>
+            <span v-else>테넌트 전체에서 발생한 모든 실패 메시지(FAILED / ESCALATED)를 수집하여 조회합니다.</span>
+          </div>
+
+          <button
+            @click="fetchMplFailures"
+            :disabled="isLoadingMpl || (searchScopeMode === 'artifact' && !selectedArtifactId)"
+            class="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-[13px] font-bold text-white shadow-md transition hover:bg-primary-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          >
+            <Search class="h-4 w-4" :class="{ 'animate-spin': isLoadingMpl }" />
+            <span>{{ isLoadingMpl ? '실패 로그 조회 중...' : '실패 로그 조회' }}</span>
+          </button>
+        </div>
       </div>
 
       <!-- 메시지 선택 (최근 MPL 실패 목록 / 수동 ID 입력) -->
@@ -599,18 +684,28 @@ const openSapIsManageQueues = () => {
           <div v-if="selectionMode === 'mpl_list'" class="space-y-3">
             <div class="flex flex-wrap items-center justify-between gap-2 text-[12.5px]">
               <div class="flex items-center gap-2">
-                <button @click="fetchMplFailures" :disabled="isLoadingMpl" class="flex items-center gap-1 text-primary text-[12px] font-semibold hover:underline disabled:opacity-50">
-                  <RefreshCw class="h-3 w-3" :class="{ 'animate-spin': isLoadingMpl }" /> 새로고침
+                <button @click="fetchMplFailures" :disabled="isLoadingMpl" class="flex items-center gap-1.5 text-primary text-[12px] font-semibold hover:underline disabled:opacity-50">
+                  <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': isLoadingMpl }" /> 새로고침
                 </button>
-                <span v-if="isLoadingMpl" class="text-[11.5px] text-primary font-medium flex items-center gap-1 animate-pulse">
-                  • 새로운 조건으로 실패 메시지 목록을 검색하는 중입니다...
-                </span>
               </div>
             </div>
 
-            <div class="overflow-auto max-h-[220px] rounded-xl border border-line bg-white">
+            <!-- 실패 로그 목록 & 로딩 오버레이 컨테이너 -->
+            <div class="relative min-h-[220px] max-h-[260px] overflow-auto rounded-xl border border-line bg-white">
+              <!-- 1. 조회 중(로딩 중) 오버레이: 이전 목록 완벽 가림 & 카드 정중앙 대형 스피너 노출 -->
+              <div v-if="isLoadingMpl" class="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/95 backdrop-blur-xs p-6 space-y-3">
+                <div class="flex items-center justify-center rounded-full bg-primary/10 p-3">
+                  <RefreshCw class="h-8 w-8 animate-spin text-primary" />
+                </div>
+                <div class="text-center space-y-1">
+                  <div class="text-[14.5px] font-bold text-ink">실패 메시지 목록을 조회 중입니다...</div>
+                  <div class="text-[12px] text-muted">서버에서 최근 MPL 실패 로그를 수집하고 있습니다. 잠시만 기다려 주세요.</div>
+                </div>
+              </div>
+
+              <!-- 2. 테이블 및 데이터 로드 영역 -->
               <table class="w-full text-left text-[12px] border-collapse">
-                <thead class="sticky top-0 bg-surface-2 text-faint font-semibold border-b border-line">
+                <thead class="sticky top-0 bg-surface-2 text-faint font-semibold border-b border-line z-10">
                   <tr>
                     <th class="p-2.5">상태</th>
                     <th class="p-2.5">아티팩트</th>
@@ -621,17 +716,8 @@ const openSapIsManageQueues = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-if="isLoadingMpl">
-                    <td colspan="6" class="py-12 text-center text-muted bg-surface-2/20">
-                      <div class="flex flex-col items-center justify-center gap-2.5">
-                        <RefreshCw class="h-6 w-6 animate-spin text-primary" />
-                        <div class="text-[13px] font-semibold text-ink">새로운 조건으로 실패 메시지 목록을 검색하는 중입니다…</div>
-                        <div class="text-[11.5px] text-muted">잠시만 기다려 주세요.</div>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr v-else-if="mplLogs.length === 0">
-                    <td colspan="6" class="p-8 text-center text-muted bg-surface-2/40">
+                  <tr v-if="mplLogs.length === 0">
+                    <td colspan="6" class="p-10 text-center text-muted bg-surface-2/40">
                       <div class="flex flex-col items-center justify-center gap-2">
                         <div class="rounded-full bg-line-2/40 p-3 text-muted">
                           <CheckCircle2 class="h-6 w-6 text-pass" />
