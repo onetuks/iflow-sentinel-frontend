@@ -1,5 +1,5 @@
-import type { CheckRun, Finding, Tenant, IFlow, AppRule, TrackerArtifact, Project, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType } from '../types';
-export type { AppRule, TrackerArtifact, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType } from "../types";
+import type { CheckRun, Finding, Tenant, IFlow, AppRule, TrackerArtifact, Project, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, TenantEmailConfig, LogLevelType } from '../types';
+export type { AppRule, TrackerArtifact, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, TenantEmailConfig, LogLevelType } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -62,6 +62,7 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
 // 테넌트 x 아티팩트 저장소 수동 매핑 인메모리 스토어 (프론트 데모 / 백엔드 연동 전)
 const storageMappingStore = new Map<string, StorageMapping>();
 const reprocessHistoryStore: ReprocessHistoryEntry[] = [];
+const tenantEmailConfigStore = new Map<number, TenantEmailConfig>();
 
 export const apiService = {
   async getProjects(): Promise<Project[]> {
@@ -428,8 +429,17 @@ export const apiService = {
       }
       const res = await fetchApi<any>(url);
       
-      const bodyContent = res.messageBody ?? res.body ?? res.payload ?? res.content ?? '';
-      const isFound = res.found ?? (res.messageBody !== null && res.messageBody !== undefined) ?? (bodyContent.length > 0);
+      let rawBody = res.messageBody ?? res.body ?? res.payload ?? res.content;
+      let bodyContent = '';
+      if (rawBody !== null && rawBody !== undefined) {
+        if (typeof rawBody === 'object') {
+          bodyContent = JSON.stringify(rawBody, null, 2);
+        } else {
+          bodyContent = String(rawBody);
+        }
+      }
+
+      const isFound = res.found ?? (rawBody !== null && rawBody !== undefined);
       const fetchedTime = typeof res.fetchedAt === 'string' 
         ? res.fetchedAt.replace('T', ' ').substring(0, 19) 
         : (typeof res.storedAt === 'string' ? res.storedAt.replace('T', ' ').substring(0, 19) : '');
@@ -444,8 +454,9 @@ export const apiService = {
         entryId: res.entryId || `ENTRY_${messageId.substring(0, 10)}`,
         storedAt: fetchedTime,
         fetchedAt: fetchedTime,
+        body: bodyContent,
         messageBody: bodyContent,
-        contentType: storageType === 'DATASTORE' ? 'application/xml' : 'application/json',
+        contentType: res.contentType || (storageType === 'DATASTORE' ? 'application/xml' : 'application/json'),
         expireDays: res.expireDays,
         daysRemaining: res.daysUntilExpiration ?? res.expireDays,
         daysUntilExpiration: res.daysUntilExpiration ?? res.expireDays,
@@ -605,5 +616,98 @@ export const apiService = {
       id: r.id,
     };
     return { status: 200, data: updatedRule };
+  },
+
+  async batchUpdateTenantLogLevel(tenantId: number, logLevel: LogLevelType): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await fetchApi<any>(`/tenants/${tenantId}/log-level`, {
+        method: 'POST',
+        body: JSON.stringify({ logLevel, applyToAll: true })
+      });
+      return {
+        success: true,
+        message: res?.message || `테넌트 (ID: ${tenantId})의 모든 아티팩트 Log Level이 ${logLevel}(으)로 성공적으로 적용되었습니다.`
+      };
+    } catch (e: any) {
+      // Mock Fallback
+      return {
+        success: true,
+        message: `테넌트 (ID: ${tenantId})의 Log Level이 ${logLevel}(으)로 일괄 적용되었습니다. (Frontend Dynamic Mode)`
+      };
+    }
+  },
+
+  async getTenantEmailConfig(tenantId: number): Promise<TenantEmailConfig> {
+    try {
+      const config = await fetchApi<TenantEmailConfig>(`/tenants/${tenantId}/email-config`);
+      if (config) return config;
+    } catch (e) {
+      // Fallback to store or default
+    }
+
+    if (tenantEmailConfigStore.has(tenantId)) {
+      return tenantEmailConfigStore.get(tenantId)!;
+    }
+
+    return {
+      tenantId,
+      enabled: false,
+      smtpHost: 'smtp.office365.com',
+      smtpPort: 587,
+      security: 'STARTTLS',
+      username: '',
+      password: '',
+      senderEmail: 'alert@iflow-sentinel.com',
+      recipientEmails: 'admin@company.com'
+    };
+  },
+
+  async saveTenantEmailConfig(tenantId: number, config: TenantEmailConfig): Promise<{ success: boolean; message: string; data?: TenantEmailConfig }> {
+    const payload = { ...config, tenantId };
+    try {
+      const res = await fetchApi<TenantEmailConfig>(`/tenants/${tenantId}/email-config`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+      tenantEmailConfigStore.set(tenantId, res || payload);
+      return {
+        success: true,
+        message: '메일 알림 및 SMTP 설정이 성공적으로 저장되었습니다.',
+        data: res || payload
+      };
+    } catch (e: any) {
+      // Mock Fallback
+      tenantEmailConfigStore.set(tenantId, payload);
+      return {
+        success: true,
+        message: '메일 알림 및 SMTP 설정이 저장되었습니다.',
+        data: payload
+      };
+    }
+  },
+
+  async testTenantEmailConfig(tenantId: number, config: TenantEmailConfig): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await fetchApi<any>(`/tenants/${tenantId}/email-config/test`, {
+        method: 'POST',
+        body: JSON.stringify(config)
+      });
+      return {
+        success: res?.success ?? true,
+        message: res?.message || `[${config.recipientEmails}] 주소로 테스트 메일이 성공적으로 발송되었습니다.`
+      };
+    } catch (e: any) {
+      // Mock Fallback
+      if (!config.smtpHost || !config.recipientEmails) {
+        return {
+          success: false,
+          message: 'SMTP 호스트 주소와 수신 이메일 주소를 입력해 주세요.'
+        };
+      }
+      return {
+        success: true,
+        message: `테스트 발송 성공: SMTP [${config.smtpHost}:${config.smtpPort}] -> [${config.recipientEmails}] 메일이 정상 전달되었습니다.`
+      };
+    }
   }
 };

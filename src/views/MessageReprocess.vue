@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, inject, watch, nextTick } from 'vue';
 import {
   RefreshCw, Search, AlertTriangle, CheckCircle2, XCircle, History, PlayCircle,
-  Database, Layers, ExternalLink, AlertCircle, Clock, FileText, Check, Globe
+  Database, Layers, ExternalLink, AlertCircle, Clock, FileText, Check, Globe, Copy
 } from 'lucide-vue-next';
 import { apiService } from '../services/api';
 import type {
@@ -296,6 +296,105 @@ const lookupMessage = async () => {
     if (currentRequestId === lookupRequestId) {
       isLooking.value = false;
     }
+  }
+};
+
+// ── 메시지 본문 포맷팅 (XML / JSON / TEXT) & 유틸 ────────────
+function formatXml(xml: string): string {
+  if (!xml || typeof xml !== 'string') return '';
+  const trimmed = xml.trim();
+  if (!trimmed.startsWith('<')) return xml;
+
+  try {
+    let formatted = '';
+    let indent = 0;
+    const tab = '  ';
+
+    const cleanXml = trimmed.replace(/(>)\s*(<)/g, '$1\n$2');
+    const lines = cleanXml.split('\n');
+
+    for (let rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      if (line.startsWith('</')) {
+        if (indent > 0) indent--;
+        formatted += tab.repeat(indent) + line + '\n';
+      } else if (
+        line.startsWith('<?') ||
+        line.startsWith('<!') ||
+        line.startsWith('<!--') ||
+        line.endsWith('/>') ||
+        (line.startsWith('<') && line.includes('</') && line.indexOf('</') > line.indexOf('>'))
+      ) {
+        formatted += tab.repeat(indent) + line + '\n';
+      } else if (line.startsWith('<')) {
+        formatted += tab.repeat(indent) + line + '\n';
+        indent++;
+      } else {
+        formatted += tab.repeat(indent) + line + '\n';
+      }
+    }
+    return formatted.trim();
+  } catch (e) {
+    return xml;
+  }
+}
+
+function formatJson(jsonStr: string): string | null {
+  if (!jsonStr || typeof jsonStr !== 'string') return null;
+  const trimmed = jsonStr.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return JSON.stringify(parsed, null, 2);
+  } catch (e) {
+    return null;
+  }
+}
+
+const detectedContentType = computed<'XML' | 'JSON' | 'TEXT'>(() => {
+  const content = lookupResult.value?.messageBody || lookupResult.value?.body || '';
+  const trimmed = (typeof content === 'string' ? content : JSON.stringify(content)).trim();
+  if (!trimmed) return 'TEXT';
+  if (trimmed.startsWith('<')) return 'XML';
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      JSON.parse(trimmed);
+      return 'JSON';
+    } catch {
+      return 'TEXT';
+    }
+  }
+  return 'TEXT';
+});
+
+const formattedBody = computed(() => {
+  const content = lookupResult.value?.messageBody || lookupResult.value?.body || '';
+  if (!content) return '';
+  const str = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+
+  if (detectedContentType.value === 'JSON') {
+    const jsonFormatted = formatJson(str);
+    if (jsonFormatted) return jsonFormatted;
+  } else if (detectedContentType.value === 'XML') {
+    return formatXml(str);
+  }
+  return str;
+});
+
+const isCopied = ref(false);
+const copyBodyToClipboard = async () => {
+  if (!formattedBody.value) return;
+  try {
+    await navigator.clipboard.writeText(formattedBody.value);
+    isCopied.value = true;
+    setTimeout(() => {
+      isCopied.value = false;
+    }, 2000);
+  } catch (e) {
+    console.error('Failed to copy body:', e);
   }
 };
 
@@ -846,21 +945,61 @@ const openSapIsManageQueues = () => {
         <div class="rounded-2xl border border-line bg-surface p-5 shadow-sm flex flex-col justify-between">
           <div>
             <div class="flex items-center justify-between border-b border-line pb-3 mb-3">
-              <h3 class="m-0 text-[14.5px] font-bold text-ink">Body 미리보기</h3>
-              <span v-if="lookupResult?.sizeBytes" class="font-mono text-[11.5px] text-muted">
-                {{ lookupResult.sizeBytes }} bytes
-              </span>
+              <div class="flex items-center gap-2">
+                <h3 class="m-0 text-[14.5px] font-bold text-ink">Body 미리보기</h3>
+                <span
+                  v-if="!isLooking && lookupResult?.found && detectedContentType"
+                  :class="[
+                    'rounded-md px-2 py-0.5 font-mono text-[10.5px] font-bold tracking-wider',
+                    detectedContentType === 'XML' ? 'bg-[#E0F2FE] text-[#0284C7] border border-[#B9E6FE]' :
+                    detectedContentType === 'JSON' ? 'bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]' :
+                    'bg-surface-2 text-muted border border-line-2'
+                  ]"
+                >
+                  {{ detectedContentType }}
+                </span>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <span v-if="!isLooking && lookupResult?.sizeBytes" class="font-mono text-[11.5px] text-muted">
+                  {{ lookupResult.sizeBytes.toLocaleString() }} bytes
+                </span>
+                <button
+                  v-if="!isLooking && lookupResult?.found && formattedBody"
+                  @click="copyBodyToClipboard"
+                  class="flex items-center gap-1 rounded-lg border border-line bg-white px-2.5 py-1 text-[11.5px] font-medium text-ink transition hover:bg-surface-2 active:scale-95 shadow-2xs cursor-pointer"
+                  title="본문 클립보드 복사"
+                >
+                  <Check v-if="isCopied" class="h-3.5 w-3.5 text-pass" />
+                  <Copy v-else class="h-3.5 w-3.5 text-muted" />
+                  <span>{{ isCopied ? '복사 완료' : '복사' }}</span>
+                </button>
+              </div>
             </div>
 
-            <div v-if="isLooking" class="py-16 text-center text-muted text-[12.5px]">
-              저장소에서 메시지 Body 조회 중…
+            <!-- 1. 조회 중 스피너 로딩 UI -->
+            <div v-if="isLooking" class="flex flex-col items-center justify-center min-h-[220px] rounded-xl border border-line bg-surface-2/60 p-6 space-y-3">
+              <div class="flex items-center justify-center rounded-full bg-primary/10 p-3">
+                <RefreshCw class="h-7 w-7 animate-spin text-primary" />
+              </div>
+              <div class="text-center space-y-1">
+                <div class="text-[13.5px] font-bold text-ink">메시지 본문(Body)을 조회하는 중입니다...</div>
+                <div class="text-[11.5px] text-muted">{{ targetStorageType === 'DATASTORE' ? 'Data Store' : 'JMS Queue' }}에서 메시지 페이로드를 가져오고 있습니다.</div>
+              </div>
             </div>
-            <pre
-              v-else-if="lookupResult?.found"
-              class="max-h-[260px] overflow-auto rounded-xl bg-[#1A1E2E] p-4 font-mono text-[12px] leading-relaxed text-[#D5D9EE] whitespace-pre-wrap break-all border border-line"
-            >{{ lookupResult.body || '(본문이 비어있습니다)' }}</pre>
-            <div v-else class="flex h-[180px] items-center justify-center text-[12.5px] text-faint border border-dashed border-line rounded-xl">
-              {{ lookupResult?.notFoundReason || 'Message ID를 조회하면 원본 본문이 표시됩니다' }}
+
+            <!-- 2. 본문 조회 성공 (XML/JSON 포맷팅 프리뷰) -->
+            <div v-else-if="lookupResult?.found" class="relative group">
+              <pre
+                class="max-h-[280px] overflow-auto rounded-xl bg-[#131622] p-4 font-mono text-[12px] leading-relaxed text-[#E2E8F0] whitespace-pre-wrap break-all border border-[#2D3748] shadow-inner selection:bg-primary/30"
+              >{{ formattedBody || '(본문이 비어있습니다)' }}</pre>
+            </div>
+
+            <!-- 3. 본문 미조회 / 미존재 안내 -->
+            <div v-else class="flex min-h-[220px] flex-col items-center justify-center text-[12.5px] text-faint border border-dashed border-line rounded-xl p-6 text-center space-y-1 bg-surface-2/20">
+              <FileText class="h-6 w-6 text-muted mb-1" />
+              <div class="font-medium text-ink">{{ lookupResult?.notFoundReason || 'Message ID를 조회하면 원본 본문이 표시됩니다' }}</div>
+              <div class="text-[11.5px] text-muted">선택한 저장소에서 해당 ID의 페이로드가 검색되면 포맷팅된 본문이 이곳에 출력됩니다.</div>
             </div>
           </div>
 
