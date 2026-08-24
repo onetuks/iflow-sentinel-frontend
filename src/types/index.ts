@@ -14,6 +14,30 @@ export interface Tenant {
   status?: 'connected' | 'disconnected' | 'error';
   lastChecked?: string;
   packageCount?: number;
+  logLevel?: 'INFO' | 'DEBUG' | 'TRACE' | 'WARN' | 'ERROR' | 'NONE';
+  emailConfig?: TenantEmailConfig;
+}
+
+export type LogLevelType = 'INFO' | 'DEBUG' | 'TRACE' | 'WARN' | 'ERROR' | 'NONE';
+
+export interface TenantLogLevelConfig {
+  tenantId: number;
+  logLevel: LogLevelType;
+  applyToAll: boolean;
+  targetPackageId?: number;
+}
+
+export interface TenantEmailConfig {
+  tenantId?: number;
+  enabled: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  security: 'NONE' | 'STARTTLS' | 'SSL_TLS';
+  username: string;
+  password?: string;
+  senderEmail: string;
+  recipientEmails: string;
+  updatedAt?: string;
 }
 
 export interface Rule {
