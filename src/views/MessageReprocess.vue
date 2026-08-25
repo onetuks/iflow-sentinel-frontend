@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, inject, watch, nextTick } from 'vue';
 import {
   RefreshCw, Search, AlertTriangle, CheckCircle2, XCircle, History, PlayCircle,
-  Database, Layers, ExternalLink, AlertCircle, Clock, FileText, Check, Globe, Copy
+  Database, Layers, AlertCircle, Clock, FileText, Check, Globe, Copy, Trash2
 } from 'lucide-vue-next';
 import { apiService } from '../services/api';
 import type {
@@ -448,6 +448,7 @@ const executeReprocess = async () => {
       messageId: messageId.value.trim(),
       storageType: targetStorageType.value,
       storageName: effectiveStorageName,
+      reprocessedBy: 'ADMIN',
       tenantName: currentTenant.value.name,
       artifactName: selectedArtifact.value?.artifact
     });
@@ -460,20 +461,41 @@ const executeReprocess = async () => {
 // ── 재처리 이력 ─────────────────────────────────────────────
 const history = ref<ReprocessHistoryEntry[]>([]);
 const historyTenantFilter = ref<number | ''>('');
-const historyResultFilter = ref<'' | 'SUCCESS' | 'FAILED'>('');
+const historyResultFilter = ref<'' | 'SUCCESS' | 'FAILED' | 'PENDING'>('');
 const historyStorageFilter = ref<'' | 'DATASTORE' | 'JMS'>('');
+const historyMessageIdFilter = ref('');
+const isLoadingHistory = ref(false);
 
 const refreshHistory = async () => {
-  history.value = await apiService.getReprocessHistory(
-    historyTenantFilter.value ? Number(historyTenantFilter.value) : undefined
-  );
+  isLoadingHistory.value = true;
+  try {
+    history.value = await apiService.getReprocessHistories({
+      tenantId: historyTenantFilter.value ? Number(historyTenantFilter.value) : undefined,
+      status: historyResultFilter.value || undefined,
+      messageId: historyMessageIdFilter.value.trim() || undefined
+    });
+  } finally {
+    isLoadingHistory.value = false;
+  }
+};
+
+const deleteHistoryItem = async (id: number) => {
+  if (!confirm('이 재처리 이력 항목을 삭제하시겠습니까?')) return;
+  try {
+    await apiService.deleteReprocessHistory(id);
+    await refreshHistory();
+  } catch (e) {
+    console.error('Failed to delete history item:', e);
+  }
 };
 
 const filteredHistory = computed(() => {
   return history.value.filter(h => {
-    const matchResult = !historyResultFilter.value || h.result === historyResultFilter.value;
+    const currentStatus = (h.status || h.result || '').toUpperCase();
+    const matchResult = !historyResultFilter.value || currentStatus === historyResultFilter.value;
     const matchStorage = !historyStorageFilter.value || h.storageType === historyStorageFilter.value;
-    return matchResult && matchStorage;
+    const matchMessageId = !historyMessageIdFilter.value.trim() || h.messageId.toLowerCase().includes(historyMessageIdFilter.value.trim().toLowerCase());
+    return matchResult && matchStorage && matchMessageId;
   });
 });
 
@@ -483,15 +505,61 @@ const envBadgeClass = (tenantName: string) => {
   return 'bg-[#EEF0FE] text-dev';
 };
 
-// SAP IS Web UI 딥링크 이동 (백엔드 반환 딥링크 또는 기본 SAP IS URL)
-const openSapIsManageQueues = () => {
-  if (lookupResult.value?.deepLinkUrl) {
-    window.open(lookupResult.value.deepLinkUrl, '_blank');
-    return;
+// ── 통합 새로고침 (서버 조회 API 일괄 다시 호출) ───────────────────────────
+const isGlobalRefreshing = ref(false);
+
+const handleGlobalRefresh = async () => {
+  isGlobalRefreshing.value = true;
+  try {
+    const prevTenantId = activeTenantId.value;
+    const prevPackage = selectedPackage.value;
+    const prevArtifactId = selectedArtifactId.value;
+
+    // 1. 테넌트 및 아티팩트 목록 최신화
+    if (currentProjectId.value) {
+      tenants.value = await apiService.getTenants(currentProjectId.value);
+      if (prevTenantId && tenants.value.some(t => t.id === prevTenantId)) {
+        activeTenantId.value = prevTenantId;
+      }
+    }
+
+    if (currentTenant.value) {
+      isLoadingArtifacts.value = true;
+      try {
+        allArtifacts.value = await apiService.getTrackerArtifacts(currentTenant.value.id);
+        if (prevPackage && availablePackages.value.includes(prevPackage)) {
+          selectedPackage.value = prevPackage;
+        }
+        if (prevArtifactId && availableArtifacts.value.some(a => String(a.id) === String(prevArtifactId))) {
+          selectedArtifactId.value = prevArtifactId;
+        }
+      } finally {
+        isLoadingArtifacts.value = false;
+      }
+    }
+
+    // 2. 현재 활성 탭에 따른 API 재호출
+    if (activeTab.value === 'execute') {
+      await fetchMplFailures();
+      if (messageId.value.trim() && canLookup.value) {
+        await lookupMessage();
+      }
+    } else {
+      await refreshHistory();
+    }
+  } catch (e) {
+    console.error('Global refresh failed:', e);
+  } finally {
+    isGlobalRefreshing.value = false;
   }
-  if (!currentTenant.value) return;
-  const baseUrl = currentTenant.value.odataUrl.replace('/api/v1', '');
-  window.open(`${baseUrl}/shell/monitoring/JmsQueues`, '_blank');
+};
+
+// 실패 로그 목록 영역 내 새로고침 핸들러
+const handleRefreshMplFailures = async () => {
+  await fetchMplFailures();
+  if (messageId.value.trim() && canLookup.value) {
+    await lookupMessage();
+  }
 };
 </script>
 
@@ -509,6 +577,19 @@ const openSapIsManageQueues = () => {
         <div class="mt-1 text-[13px] text-muted">
           실패한 메시지를 탐지하여 원본 Body를 조회하고 엔드포인트로 안전하게 재전송합니다
         </div>
+      </div>
+
+      <!-- Header Action Buttons: 새로고침 -->
+      <div class="flex items-center gap-2">
+        <button
+          @click="handleGlobalRefresh"
+          :disabled="isGlobalRefreshing || isLoadingMpl || isLoadingArtifacts || isLoadingHistory"
+          class="flex items-center gap-1.5 rounded-xl border border-primary/20 bg-primary/10 px-3.5 py-2 text-[12.5px] font-bold text-primary shadow-xs transition hover:bg-primary/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+          title="서버 조회 API를 다시 호출하여 화면을 최신 상태로 새로고침합니다"
+        >
+          <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': isGlobalRefreshing || isLoadingMpl || isLoadingArtifacts || isLoadingHistory }" />
+          <span>{{ isGlobalRefreshing ? '새로고침 중...' : '새로고침' }}</span>
+        </button>
       </div>
     </div>
 
@@ -783,7 +864,7 @@ const openSapIsManageQueues = () => {
           <div v-if="selectionMode === 'mpl_list'" class="space-y-3">
             <div class="flex flex-wrap items-center justify-between gap-2 text-[12.5px]">
               <div class="flex items-center gap-2">
-                <button @click="fetchMplFailures" :disabled="isLoadingMpl" class="flex items-center gap-1.5 text-primary text-[12px] font-semibold hover:underline disabled:opacity-50">
+                <button @click="handleRefreshMplFailures" :disabled="isLoadingMpl" class="flex items-center gap-1.5 text-primary text-[12px] font-semibold hover:underline disabled:opacity-50 cursor-pointer">
                   <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': isLoadingMpl }" /> 새로고침
                 </button>
               </div>
@@ -926,19 +1007,6 @@ const openSapIsManageQueues = () => {
               <span v-if="lookupResult.isExpired" class="text-fail font-bold ml-1">⚠️ 만료로 인해 삭제되었을 수 있습니다!</span>
             </div>
           </div>
-
-          <!-- JMS 큐 특화 딥링크 안내 -->
-          <div v-if="targetStorageType === 'JMS'" class="rounded-xl border border-[#DDD6FE] bg-[#F5F3FF] p-3.5 space-y-2 text-[12px]">
-            <div class="flex items-center justify-between font-semibold text-[#7C3AED]">
-              <span>JMS Queue 개별 메시지 직접 확인</span>
-              <button @click="openSapIsManageQueues" class="flex items-center gap-1 text-[11.5px] hover:underline">
-                Manage Queues 이동 <ExternalLink class="h-3 w-3" />
-              </button>
-            </div>
-            <div class="text-muted text-[11.5px]">
-              SAP IS의 JMS 큐 API 제한에 대비하여, Manage Queues 화면에서 <code class="font-mono bg-white px-1 py-0.5 rounded border border-line">{{ selectedArtifact?.queueName }}</code> 큐를 직접 확인하실 수 있습니다.
-            </div>
-          </div>
         </div>
 
         <!-- 우측: Payload Body 미리보기 및 실행 -->
@@ -1035,19 +1103,19 @@ const openSapIsManageQueues = () => {
 
     <!-- ───────────── 탭 2: 재처리 이력 ───────────── -->
     <div v-else class="space-y-4">
-      <div class="flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-3 shrink-0 bg-surface p-3.5 rounded-2xl border border-line shadow-xs">
+        <div class="flex flex-wrap items-center gap-2">
           <select
             v-model="historyTenantFilter"
             @change="refreshHistory"
-            class="rounded-[10px] border border-line bg-white px-3 py-1.5 text-[13px] text-ink outline-none focus:border-primary"
+            class="rounded-[10px] border border-line bg-white px-3 py-1.5 text-[12.5px] text-ink outline-none focus:border-primary"
           >
             <option value="">모든 테넌트</option>
             <option v-for="t in tenants" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
           <select
             v-model="historyStorageFilter"
-            class="rounded-[10px] border border-line bg-white px-3 py-1.5 text-[13px] text-ink outline-none focus:border-primary"
+            class="rounded-[10px] border border-line bg-white px-3 py-1.5 text-[12.5px] text-ink outline-none focus:border-primary"
           >
             <option value="">모든 저장소</option>
             <option value="DATASTORE">Data Store</option>
@@ -1055,22 +1123,38 @@ const openSapIsManageQueues = () => {
           </select>
           <select
             v-model="historyResultFilter"
-            class="rounded-[10px] border border-line bg-white px-3 py-1.5 text-[13px] text-ink outline-none focus:border-primary"
+            @change="refreshHistory"
+            class="rounded-[10px] border border-line bg-white px-3 py-1.5 text-[12.5px] text-ink outline-none focus:border-primary"
           >
-            <option value="">모든 결과</option>
-            <option value="SUCCESS">성공</option>
-            <option value="FAILED">실패</option>
+            <option value="">모든 상태</option>
+            <option value="SUCCESS">성공 (SUCCESS)</option>
+            <option value="FAILED">실패 (FAILED)</option>
+            <option value="PENDING">대기 중 (PENDING)</option>
           </select>
+          <div class="relative">
+            <input
+              v-model="historyMessageIdFilter"
+              type="text"
+              placeholder="Message ID 검색..."
+              @keyup.enter="refreshHistory"
+              class="w-48 rounded-[10px] border border-line bg-white px-3 py-1.5 text-[12.5px] text-ink placeholder-faint outline-none focus:border-primary"
+            />
+          </div>
         </div>
 
-        <button @click="refreshHistory" class="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-[12.5px] font-semibold text-ink hover:bg-surface-2">
-          <RefreshCw class="h-3.5 w-3.5" /> 이력 새로고침
+        <button
+          @click="refreshHistory"
+          :disabled="isLoadingHistory"
+          class="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:bg-surface-2 disabled:opacity-50 cursor-pointer"
+        >
+          <RefreshCw class="h-3.5 w-3.5 text-primary" :class="{ 'animate-spin': isLoadingHistory }" />
+          <span>{{ isLoadingHistory ? '조회 중...' : '새로고침' }}</span>
         </button>
       </div>
 
-      <div class="rounded-2xl border border-line bg-surface shadow-sm">
-        <div class="bg-white">
-          <table class="w-full min-w-[880px] border-collapse text-[12.5px]">
+      <div class="rounded-2xl border border-line bg-surface shadow-sm overflow-hidden">
+        <div class="bg-white overflow-x-auto">
+          <table class="w-full min-w-[960px] border-collapse text-[12.5px]">
             <thead class="sticky top-0 z-10 bg-surface-2 text-faint font-semibold border-b border-line">
               <tr>
                 <th class="px-4 py-3 text-left">실행 일시</th>
@@ -1079,24 +1163,29 @@ const openSapIsManageQueues = () => {
                 <th class="px-4 py-3 text-left">저장소 종류</th>
                 <th class="px-4 py-3 text-left">Message ID</th>
                 <th class="px-4 py-3 text-left">실행자</th>
-                <th class="px-4 py-3 text-right">결과</th>
+                <th class="px-4 py-3 text-left">상태/결과</th>
+                <th class="px-4 py-3 text-left">상세 메시지</th>
+                <th class="px-4 py-3 text-center">작업</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="filteredHistory.length === 0">
-                <td colspan="7" class="py-16 text-center text-muted">
-                  재처리 이력이 없습니다.
+                <td colspan="9" class="py-16 text-center text-muted">
+                  <div class="flex flex-col items-center justify-center gap-1.5">
+                    <History class="h-6 w-6 text-muted/60" />
+                    <span>조회 조건에 해당하는 재처리 이력이 없습니다.</span>
+                  </div>
                 </td>
               </tr>
               <tr v-for="h in filteredHistory" :key="h.id" class="border-b border-line/50 transition hover:bg-surface-2">
-                <td class="px-4 py-3 font-mono text-muted whitespace-nowrap">{{ h.executedAt }}</td>
+                <td class="px-4 py-3 font-mono text-muted whitespace-nowrap">{{ h.reprocessedAt || h.executedAt }}</td>
                 <td class="px-4 py-3">
-                  <span :class="['rounded-full px-2 py-0.5 font-mono text-[10.5px] font-semibold', envBadgeClass(h.tenantName)]">
+                  <span :class="['rounded-full px-2 py-0.5 font-mono text-[10.5px] font-semibold', envBadgeClass(h.tenantName || '')]">
                     {{ h.tenantName }}
                   </span>
                 </td>
-                <td class="px-4 py-3 font-medium text-ink">{{ h.artifactName }}</td>
-                <td class="px-4 py-3">
+                <td class="px-4 py-3 font-medium text-ink break-all max-w-[140px]">{{ h.artifactName }}</td>
+                <td class="px-4 py-3 whitespace-nowrap">
                   <span
                     v-if="h.storageType === 'DATASTORE'"
                     class="inline-flex items-center gap-1 rounded-full bg-pass-bg border border-pass-line px-2 py-0.5 font-mono text-[11px] text-pass font-semibold"
@@ -1110,17 +1199,41 @@ const openSapIsManageQueues = () => {
                     <Layers class="h-3 w-3" /> JMS Queue
                   </span>
                 </td>
-                <td class="px-4 py-3 font-mono text-muted break-all max-w-[200px]">{{ h.messageId }}</td>
-                <td class="px-4 py-3 text-muted">{{ h.executedBy }}</td>
-                <td class="px-4 py-3 text-right">
+                <td class="px-4 py-3 font-mono text-muted break-all max-w-[180px]">{{ h.messageId }}</td>
+                <td class="px-4 py-3 text-muted whitespace-nowrap">{{ h.reprocessedBy || h.executedBy || 'ADMIN' }}</td>
+                <td class="px-4 py-3 whitespace-nowrap">
                   <span
-                    :class="[
-                      'rounded-full border px-2.5 py-0.5 font-mono text-[11.5px] font-semibold',
-                      h.result === 'SUCCESS' ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail-line bg-fail-bg text-fail'
-                    ]"
+                    v-if="(h.status || h.result) === 'SUCCESS'"
+                    class="rounded-full border border-pass-line bg-pass-bg px-2.5 py-0.5 font-mono text-[11px] font-semibold text-pass"
                   >
-                    {{ h.result === 'SUCCESS' ? '성공 (200)' : '실패' }}
+                    성공
                   </span>
+                  <span
+                    v-else-if="(h.status || h.result) === 'PENDING'"
+                    class="rounded-full border border-warn-line bg-warn-bg px-2.5 py-0.5 font-mono text-[11px] font-semibold text-warn"
+                  >
+                    대기 중
+                  </span>
+                  <span
+                    v-else
+                    class="rounded-full border border-fail-line bg-fail-bg px-2.5 py-0.5 font-mono text-[11px] font-semibold text-fail"
+                  >
+                    실패
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-muted truncate max-w-[200px]" :title="h.statusMessage || h.responseMessage">
+                  {{ h.statusMessage || h.responseMessage || '-' }}
+                </td>
+                <td class="px-4 py-3 text-center whitespace-nowrap">
+                  <div class="flex items-center justify-center gap-1.5">
+                    <button
+                      @click="deleteHistoryItem(h.id)"
+                      class="rounded-lg p-1 text-muted hover:bg-fail-bg hover:text-fail transition cursor-pointer"
+                      title="이력 삭제"
+                    >
+                      <Trash2 class="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>

@@ -16,6 +16,14 @@ export interface Tenant {
   packageCount?: number;
   logLevel?: 'INFO' | 'DEBUG' | 'TRACE' | 'WARN' | 'ERROR' | 'NONE';
   emailConfig?: TenantEmailConfig;
+  // 인터페이스(런타임/재처리) 호출 권한용 인증 정보
+  interfaceClientId?: string;
+  interfaceClientSecret?: string;
+  interfaceTokenUrl?: string;
+  // 하위 호환 및 백엔드 DTO 매핑
+  runtimeClientId?: string;
+  runtimeClientSecret?: string;
+  runtimeTokenUrl?: string;
 }
 
 export type LogLevelType = 'INFO' | 'DEBUG' | 'TRACE' | 'WARN' | 'ERROR' | 'NONE';
@@ -142,7 +150,7 @@ export interface StorageMapping {
   storageType: 'DATASTORE' | 'JMS';
   storageName: string;
   expireDays?: number;
-  confidenceLevel?: 'AUTO_PARSED' | 'MANUAL_OVERRIDDEN' | 'DEFAULT_FALLBACK';
+  confidenceLevel?: 'AUTO_PARSED' | 'MANUAL_INPUT' | 'MANUAL_OVERRIDDEN' | 'DEFAULT_FALLBACK';
   updatedAt?: string;
   // UI 호환 필드
   detectedName?: string;
@@ -174,34 +182,56 @@ export interface DataStoreEntryLookupResult {
   notFoundReason?: string;
 }
 
+/** 메시지 재처리 실행 요청 (Backend MessageReprocessRequest 규격 매핑) */
+export interface MessageReprocessRequest {
+  tenantId: number;
+  artifactId: number;
+  messageId: string;
+  storageType: 'DATASTORE' | 'JMS';
+  storageName: string;
+  reprocessedBy?: string;
+}
+
 /** 메시지 재처리 실행 결과 (Backend MessageReprocessResult 규격 매핑) */
 export interface ReprocessExecutionResult {
+  historyId?: number;
   success: boolean;
   messageId?: string;
   storageType?: 'DATASTORE' | 'JMS';
   storageName?: string;
-  responseCode?: number;
-  message?: string;
   statusMessage?: string;
-  executedAt?: string;
   reprocessedAt?: string;
   deepLinkUrl?: string;
+  // UI 하위 호환 필드
+  responseCode?: number;
+  message?: string;
+  executedAt?: string;
 }
 
-/** 메시지 재처리 이력 한 건 */
+export type ReprocessStatus = 'SUCCESS' | 'FAILED' | 'PENDING';
+
+/** 메시지 재처리 이력 한 건 (Backend ReprocessHistoryResponse 규격 매핑) */
 export interface ReprocessHistoryEntry {
   id: number;
-  executedAt: string;
-  tenantName: string;
-  artifactName: string;
+  tenantId?: number;
+  tenantName?: string;
+  artifactId?: number | string;
+  artifactName?: string;
   messageId: string;
   storageType: 'DATASTORE' | 'JMS';
   storageName: string;
-  executedBy: string;
-  result: 'SUCCESS' | 'FAILED';
+  status?: ReprocessStatus | string;
+  statusMessage?: string;
+  reprocessedAt?: string;
+  reprocessedBy?: string;
+  deepLinkUrl?: string;
+
+  // UI 하위 호환 필드
+  executedAt?: string;
+  executedBy?: string;
+  result?: 'SUCCESS' | 'FAILED' | 'PENDING' | string;
   responseCode?: number;
   responseMessage?: string;
-  deepLinkUrl?: string;
 }
 
 export interface AppRule {

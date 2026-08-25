@@ -41,6 +41,8 @@ const isTesting = ref(false);
 const testResult = ref('');
 const showTenantForm = ref(false);
 const tenantFormMode = ref<'create' | 'edit'>('create');
+const useSeparateInterfaceAuth = ref(false);
+
 const currentTenant = ref<{
   id?: number;
   name: string;
@@ -49,13 +51,19 @@ const currentTenant = ref<{
   clientId: string;
   clientSecret: string;
   tokenUrl: string;
+  interfaceClientId?: string;
+  interfaceClientSecret?: string;
+  interfaceTokenUrl?: string;
 }>({
   name: '',
   platformType: 'CLOUD_FOUNDRY',
   odataUrl: '',
   clientId: '',
   clientSecret: '',
-  tokenUrl: ''
+  tokenUrl: '',
+  interfaceClientId: '',
+  interfaceClientSecret: '',
+  interfaceTokenUrl: ''
 });
 
 // --- Additional Tenant Features State (Log Level & Email Notification) ---
@@ -126,6 +134,10 @@ const handleTestConnection = async () => {
   isTesting.value = true;
   testResult.value = '확인 중…';
   try {
+    const ifClientId = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientId : currentTenant.value.clientId;
+    const ifClientSecret = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientSecret : currentTenant.value.clientSecret;
+    const ifTokenUrl = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceTokenUrl : currentTenant.value.tokenUrl;
+
     const payload = {
       id: currentTenant.value.id,
       projectId: currentProjectId.value || 1,
@@ -134,6 +146,12 @@ const handleTestConnection = async () => {
       clientId: currentTenant.value.clientId,
       clientSecret: currentTenant.value.clientSecret,
       tokenUrl: currentTenant.value.tokenUrl,
+      interfaceClientId: ifClientId,
+      interfaceClientSecret: ifClientSecret,
+      interfaceTokenUrl: ifTokenUrl,
+      runtimeClientId: ifClientId,
+      runtimeClientSecret: ifClientSecret,
+      runtimeTokenUrl: ifTokenUrl,
       platformType: currentTenant.value.platformType as any,
       authType: 'OAUTH2_CLIENT_CREDENTIALS' as any
     };
@@ -161,8 +179,12 @@ const handleAddTenantClick = () => {
     odataUrl: '',
     clientId: '',
     clientSecret: '',
-    tokenUrl: ''
+    tokenUrl: '',
+    interfaceClientId: '',
+    interfaceClientSecret: '',
+    interfaceTokenUrl: ''
   };
+  useSeparateInterfaceAuth.value = false;
   showTenantForm.value = true;
   testResult.value = '';
   activeTab.value = 'logLevel';
@@ -173,6 +195,7 @@ const handleAddTenantClick = () => {
 
 const handleEditTenantClick = async (tenant: Tenant) => {
   tenantFormMode.value = 'edit';
+  const hasSeparateAuth = !!(tenant.interfaceClientId || tenant.interfaceTokenUrl || tenant.runtimeClientId || tenant.runtimeTokenUrl);
   currentTenant.value = {
     id: tenant.id,
     name: tenant.name,
@@ -180,8 +203,12 @@ const handleEditTenantClick = async (tenant: Tenant) => {
     odataUrl: tenant.odataUrl,
     clientId: tenant.clientId,
     clientSecret: tenant.clientSecret || '',
-    tokenUrl: tenant.tokenUrl
+    tokenUrl: tenant.tokenUrl,
+    interfaceClientId: tenant.interfaceClientId || tenant.runtimeClientId || '',
+    interfaceClientSecret: tenant.interfaceClientSecret || tenant.runtimeClientSecret || '',
+    interfaceTokenUrl: tenant.interfaceTokenUrl || tenant.runtimeTokenUrl || ''
   };
+  useSeparateInterfaceAuth.value = hasSeparateAuth;
   showTenantForm.value = true;
   testResult.value = '';
   activeTab.value = 'logLevel';
@@ -201,6 +228,10 @@ const handleSaveTenant = async () => {
     return;
   }
   
+  const ifClientId = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientId : currentTenant.value.clientId;
+  const ifClientSecret = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientSecret : currentTenant.value.clientSecret;
+  const ifTokenUrl = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceTokenUrl : currentTenant.value.tokenUrl;
+
   const payload = {
     projectId: currentProjectId.value,
     name: currentTenant.value.name,
@@ -208,6 +239,12 @@ const handleSaveTenant = async () => {
     clientId: currentTenant.value.clientId,
     clientSecret: currentTenant.value.clientSecret,
     tokenUrl: currentTenant.value.tokenUrl,
+    interfaceClientId: ifClientId,
+    interfaceClientSecret: ifClientSecret,
+    interfaceTokenUrl: ifTokenUrl,
+    runtimeClientId: ifClientId,
+    runtimeClientSecret: ifClientSecret,
+    runtimeTokenUrl: ifTokenUrl,
     platformType: currentTenant.value.platformType as any,
     authType: 'OAUTH2_CLIENT_CREDENTIALS' as any
   };
@@ -417,52 +454,100 @@ const getBadgeClass = (tenant: Tenant) => {
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <!-- LEFT COLUMN: Primary Tenant Connection Info Form (5 Cols) -->
-        <div class="lg:col-span-5 flex flex-col justify-between rounded-xl border border-line/70 bg-surface-1/40 p-5">
-          <div>
-            <div class="mb-4 flex items-center gap-2 text-[13px] font-bold text-ink">
-              <Layers class="h-4 w-4 text-primary" />
-              <span>테넌트 접속 기본 설정</span>
+        <!-- LEFT COLUMN: Primary Tenant Connection & Interface Auth Form (6 Cols) -->
+        <div class="lg:col-span-6 flex flex-col justify-between rounded-xl border border-line/70 bg-surface-1/40 p-5">
+          <div class="space-y-4">
+            <!-- 1. 기본 정보 및 API 관리 인증 정보 (Management / OData) -->
+            <div>
+              <div class="mb-3 flex items-center justify-between">
+                <div class="flex items-center gap-2 text-[13px] font-bold text-ink">
+                  <Layers class="h-4 w-4 text-primary" />
+                  <span>API 관리 인증 설정 (Management / OData)</span>
+                </div>
+                <span class="rounded-full bg-primary-tint px-2 py-0.5 font-mono text-[10.5px] font-semibold text-primary">
+                  메타데이터/로그 조회용
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">테넌트 이름</label>
+                    <input type="text" v-model="currentTenant.name" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-sans text-[12.5px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="예: S-Oil PRD" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">유형</label>
+                    <select v-model="currentTenant.platformType" class="w-full appearance-none rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-sans text-[12.5px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" style="background-image: url('data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236C7385\' stroke-width=\'2.2\'><path d=\'M6 9l6 6 6-6\'/></svg>'); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px;">
+                      <option value="CLOUD_FOUNDRY">Cloud Foundry</option>
+                      <option value="NEO">Neo</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">OData API URL</label>
+                  <input type="text" v-model="currentTenant.odataUrl" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="https://..." />
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">Management Client ID</label>
+                    <input type="text" v-model="currentTenant.clientId" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="Client ID" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">Management Client Secret</label>
+                    <input type="password" v-model="currentTenant.clientSecret" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="••••••••" />
+                  </div>
+                </div>
+
+                <div>
+                  <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">Management Token URL</label>
+                  <input type="text" v-model="currentTenant.tokenUrl" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="https://..." />
+                </div>
+              </div>
             </div>
 
-            <div class="grid grid-cols-1 gap-3.5">
-              <div>
-                <label class="mb-1 block text-[12px] font-semibold text-[#3B4257]">테넌트 이름</label>
-                <input type="text" v-model="currentTenant.name" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-sans text-[12.5px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="예: S-Oil PRD" />
+            <!-- 2. 인터페이스(런타임) 호출 전용 인증 정보 (Interface Execution Auth) -->
+            <div class="rounded-xl border border-line-2 bg-surface p-3.5 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5 text-[12.5px] font-bold text-ink">
+                  <ShieldCheck class="h-4 w-4 text-[#7C3AED]" />
+                  <span>인터페이스 호출 권한 인증 정보 (Runtime)</span>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer gap-2 text-[11.5px] font-semibold text-muted">
+                  <input type="checkbox" v-model="useSeparateInterfaceAuth" class="sr-only peer" />
+                  <div class="w-8 h-4.5 bg-line-2 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-[#7C3AED]"></div>
+                  <span :class="{ 'text-[#7C3AED] font-bold': useSeparateInterfaceAuth }">별도 등록</span>
+                </label>
               </div>
 
-              <div>
-                <label class="mb-1 block text-[12px] font-semibold text-[#3B4257]">유형</label>
-                <select v-model="currentTenant.platformType" class="w-full appearance-none rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-sans text-[12.5px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" style="background-image: url('data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236C7385\' stroke-width=\'2.2\'><path d=\'M6 9l6 6 6-6\'/></svg>'); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px;">
-                  <option value="CLOUD_FOUNDRY">Cloud Foundry</option>
-                  <option value="NEO">Neo</option>
-                </select>
-              </div>
-
-              <div>
-                <label class="mb-1 block text-[12px] font-semibold text-[#3B4257]">OData API URL</label>
-                <input type="text" v-model="currentTenant.odataUrl" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="https://..." />
-              </div>
-
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="mb-1 block text-[12px] font-semibold text-[#3B4257]">Client ID</label>
-                  <input type="text" v-model="currentTenant.clientId" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="Client ID" />
+              <div v-if="useSeparateInterfaceAuth" class="grid grid-cols-1 gap-3 pt-1 border-t border-line/60">
+                <div class="text-[11px] text-muted leading-relaxed">
+                  재처리 실행 시 타겟 IFlow 런타임 엔드포인트를 호출할 수 있는 권한을 가진 인증정보를 입력합니다.
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Client ID</label>
+                    <input type="text" v-model="currentTenant.interfaceClientId" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15" placeholder="예: sb-..." />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Client Secret</label>
+                    <input type="password" v-model="currentTenant.interfaceClientSecret" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15" placeholder="••••••••" />
+                  </div>
                 </div>
                 <div>
-                  <label class="mb-1 block text-[12px] font-semibold text-[#3B4257]">Client Secret</label>
-                  <input type="password" v-model="currentTenant.clientSecret" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="••••••••" />
+                  <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Token URL</label>
+                  <input type="text" v-model="currentTenant.interfaceTokenUrl" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15" placeholder="https://..." />
                 </div>
               </div>
-
-              <div>
-                <label class="mb-1 block text-[12px] font-semibold text-[#3B4257]">Token URL</label>
-                <input type="text" v-model="currentTenant.tokenUrl" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="https://..." />
+              <div v-else class="rounded-lg bg-surface-2/60 px-3 py-2 text-[11.5px] text-muted flex items-center gap-2">
+                <Info class="h-3.5 w-3.5 text-primary shrink-0" />
+                <span>API 관리 인증정보(Management Client ID/Secret)를 인터페이스 호출에 공통으로 사용합니다.</span>
               </div>
             </div>
           </div>
 
-          <div class="mt-5 border-t border-line/60 pt-4">
+          <div class="mt-4 border-t border-line/60 pt-4">
             <div class="mb-3 flex items-center text-[12px] font-mono text-muted">
               <span v-if="testResult" :class="getTestResultClass()">
                 {{ testResult }}
@@ -473,21 +558,21 @@ const getBadgeClass = (tenant: Tenant) => {
               <button 
                 @click="handleTestConnection" 
                 :disabled="isTesting"
-                class="flex items-center gap-1.5 rounded-[10px] border border-line-2 bg-surface px-3 py-2 text-[12px] font-semibold text-ink shadow-sm transition hover:border-[#D0D5E1] hover:bg-surface-2 disabled:opacity-50"
+                class="flex items-center gap-1.5 rounded-[10px] border border-line-2 bg-surface px-3 py-2 text-[12px] font-semibold text-ink shadow-sm transition hover:border-[#D0D5E1] hover:bg-surface-2 disabled:opacity-50 cursor-pointer"
               >
                 <TestTube2 class="h-3.5 w-3.5" />
                 연결 테스트
               </button>
               <div class="flex-1"></div>
-              <button @click="handleSaveTenant" class="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2 text-[12.5px] font-semibold text-white shadow-md transition hover:shadow-lg">
+              <button @click="handleSaveTenant" class="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2 text-[12.5px] font-semibold text-white shadow-md transition hover:shadow-lg cursor-pointer">
                 테넌트 저장
               </button>
             </div>
           </div>
         </div>
 
-        <!-- RIGHT COLUMN: Extended Features Tab Container (7 Cols) -->
-        <div class="lg:col-span-7 rounded-xl border border-line/70 bg-surface-1/40 p-5 flex flex-col justify-between">
+        <!-- RIGHT COLUMN: Extended Features Tab Container (6 Cols) -->
+        <div class="lg:col-span-6 rounded-xl border border-line/70 bg-surface-1/40 p-5 flex flex-col justify-between">
           <!-- Mode Guard: When Creating New Tenant -->
           <div v-if="tenantFormMode === 'create'" class="my-auto flex flex-col items-center justify-center p-8 text-center">
             <div class="mb-3 rounded-full bg-primary-tint p-4 text-primary">

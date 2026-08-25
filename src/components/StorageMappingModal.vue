@@ -71,14 +71,14 @@ const handleSave = async () => {
   saveSuccess.value = false;
   try {
     let targetStorageName = detectedName.value;
-    let confidenceLevel: 'AUTO_PARSED' | 'MANUAL_OVERRIDDEN' | 'DEFAULT_FALLBACK' = 'AUTO_PARSED';
+    let confidenceLevel: 'AUTO_PARSED' | 'MANUAL_INPUT' = 'AUTO_PARSED';
 
     if (activeTab.value === 'manual' && customOverride.value.trim()) {
       targetStorageName = customOverride.value.trim();
-      confidenceLevel = 'MANUAL_OVERRIDDEN';
+      confidenceLevel = 'MANUAL_INPUT';
     } else if (activeTab.value === 'api' && suggestedCandidate.value.trim()) {
       targetStorageName = suggestedCandidate.value.trim();
-      confidenceLevel = 'DEFAULT_FALLBACK';
+      confidenceLevel = 'MANUAL_INPUT';
     } else {
       targetStorageName = detectedName.value;
       confidenceLevel = 'AUTO_PARSED';

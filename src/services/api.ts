@@ -19,6 +19,8 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
       ...options?.headers,
     },
   });
@@ -479,6 +481,7 @@ export const apiService = {
     messageId: string;
     storageType?: 'DATASTORE' | 'JMS';
     storageName?: string;
+    reprocessedBy?: string;
     tenantName?: string;
     artifactName?: string;
   }): Promise<ReprocessExecutionResult> {
@@ -487,7 +490,8 @@ export const apiService = {
       artifactId: toLongId(payload.artifactId) || 1,
       messageId: payload.messageId,
       storageType: payload.storageType || 'DATASTORE',
-      storageName: payload.storageName
+      storageName: payload.storageName,
+      reprocessedBy: payload.reprocessedBy || 'ADMIN'
     };
 
     try {
@@ -498,22 +502,29 @@ export const apiService = {
       const execTime = typeof res.reprocessedAt === 'string' ? res.reprocessedAt.replace('T', ' ').substring(0, 19) : (res.executedAt || new Date().toISOString().replace('T', ' ').substring(0, 19));
       
       const resultEntry: ReprocessHistoryEntry = {
-        id: Date.now(),
-        executedAt: execTime,
+        id: res.historyId || Date.now(),
+        tenantId: Number(payload.tenantId),
         tenantName: payload.tenantName || `Tenant #${payload.tenantId}`,
+        artifactId: payload.artifactId,
         artifactName: payload.artifactName || `Artifact #${payload.artifactId}`,
         messageId: payload.messageId,
         storageType: payload.storageType || 'DATASTORE',
         storageName: payload.storageName || String(payload.artifactId),
-        executedBy: 'admin@iflow.com',
+        status: res.success ? 'SUCCESS' : 'FAILED',
+        statusMessage: res.statusMessage || res.message,
+        reprocessedAt: execTime,
+        reprocessedBy: payload.reprocessedBy || 'ADMIN',
+        deepLinkUrl: res.deepLinkUrl,
+        executedAt: execTime,
+        executedBy: payload.reprocessedBy || 'ADMIN',
         result: res.success ? 'SUCCESS' : 'FAILED',
         responseCode: res.success ? 200 : 500,
-        responseMessage: res.statusMessage || res.message,
-        deepLinkUrl: res.deepLinkUrl
+        responseMessage: res.statusMessage || res.message
       };
       reprocessHistoryStore.unshift(resultEntry);
 
       return {
+        historyId: res.historyId,
         success: res.success,
         messageId: res.messageId || payload.messageId,
         storageType: res.storageType || payload.storageType || 'DATASTORE',
@@ -535,34 +546,114 @@ export const apiService = {
     }
   },
 
-  /** 메시지 재처리 이력 목록 조회 (GET /api/reprocess/history) */
-  async getReprocessHistory(tenantId?: number): Promise<ReprocessHistoryEntry[]> {
+  /** 메시지 재처리 히스토리 목록 조회 (GET /api/reprocess/histories?tenantId={tenantId}&artifactId={artifactId}&messageId={messageId}&status={status}) */
+  async getReprocessHistories(params?: {
+    tenantId?: number | string;
+    artifactId?: number | string;
+    messageId?: string;
+    status?: string;
+  }): Promise<ReprocessHistoryEntry[]> {
     try {
-      const url = tenantId ? `/reprocess/history?tenantId=${tenantId}` : '/reprocess/history';
-      const historyList = await fetchApi<any[]>(url);
+      const queryParts: string[] = [];
+      if (params?.tenantId) {
+        const tId = toLongId(params.tenantId);
+        if (tId) queryParts.push(`tenantId=${tId}`);
+      }
+      if (params?.artifactId) {
+        const aId = toLongId(params.artifactId);
+        if (aId) queryParts.push(`artifactId=${aId}`);
+      }
+      if (params?.messageId && params.messageId.trim()) {
+        queryParts.push(`messageId=${encodeURIComponent(params.messageId.trim())}`);
+      }
+      if (params?.status && params.status.trim()) {
+        queryParts.push(`status=${encodeURIComponent(params.status.trim())}`);
+      }
+
+      const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+      const historyList = await fetchApi<any[]>(`/reprocess/histories${queryString}`);
       if (Array.isArray(historyList) && historyList.length > 0) {
-        return historyList.map(h => ({
-          id: h.id || Date.now(),
-          executedAt: typeof h.executedAt === 'string' ? h.executedAt.replace('T', ' ').substring(0, 19) : (h.reprocessedAt || ''),
-          tenantName: h.tenantName || `Tenant #${h.tenantId}`,
-          artifactName: h.artifactName || `Artifact #${h.artifactId}`,
-          messageId: h.messageId,
-          storageType: h.storageType,
-          storageName: h.storageName,
-          executedBy: h.executedBy || 'admin@iflow.com',
-          result: h.result || (h.success ? 'SUCCESS' : 'FAILED'),
-          responseCode: h.responseCode,
-          responseMessage: h.responseMessage || h.statusMessage,
-          deepLinkUrl: h.deepLinkUrl
-        }));
+        return historyList.map(h => {
+          const repTime = typeof h.reprocessedAt === 'string' ? h.reprocessedAt.replace('T', ' ').substring(0, 19) : (h.executedAt || '');
+          const statusValue = (h.status || (h.result ?? 'SUCCESS')).toUpperCase();
+          return {
+            id: h.id || Date.now(),
+            tenantId: h.tenantId,
+            tenantName: h.tenantName || (h.tenantId ? `Tenant #${h.tenantId}` : '-'),
+            artifactId: h.artifactId,
+            artifactName: h.artifactName || (h.artifactId ? `Artifact #${h.artifactId}` : '-'),
+            messageId: h.messageId,
+            storageType: h.storageType,
+            storageName: h.storageName,
+            status: statusValue,
+            statusMessage: h.statusMessage || h.responseMessage,
+            reprocessedAt: repTime,
+            reprocessedBy: h.reprocessedBy || h.executedBy || 'ADMIN',
+            deepLinkUrl: h.deepLinkUrl,
+            // 하위 호환 필드
+            executedAt: repTime,
+            executedBy: h.reprocessedBy || h.executedBy || 'ADMIN',
+            result: statusValue as any,
+            responseCode: statusValue === 'SUCCESS' ? 200 : 500,
+            responseMessage: h.statusMessage || h.responseMessage
+          };
+        });
       }
       return reprocessHistoryStore;
     } catch (e) {
-      if (tenantId) {
-        return reprocessHistoryStore.filter(h => h.tenantName.includes(String(tenantId)));
+      if (params?.tenantId) {
+        return reprocessHistoryStore.filter(h => h.tenantName?.includes(String(params.tenantId)) || h.tenantId === Number(params.tenantId));
       }
       return reprocessHistoryStore;
     }
+  },
+
+  /** 메시지 재처리 이력 목록 조회 (하위 호환 유지) */
+  async getReprocessHistory(paramsOrTenantId?: number | { tenantId?: number | string; artifactId?: number | string; messageId?: string; status?: string }): Promise<ReprocessHistoryEntry[]> {
+    if (typeof paramsOrTenantId === 'number') {
+      return this.getReprocessHistories({ tenantId: paramsOrTenantId });
+    }
+    return this.getReprocessHistories(paramsOrTenantId);
+  },
+
+  /** 재처리 히스토리 단건 조회 (GET /api/reprocess/histories/{id}) */
+  async getReprocessHistoryDetail(id: number): Promise<ReprocessHistoryEntry> {
+    const h = await fetchApi<any>(`/reprocess/histories/${id}`);
+    const repTime = typeof h.reprocessedAt === 'string' ? h.reprocessedAt.replace('T', ' ').substring(0, 19) : (h.executedAt || '');
+    const statusValue = (h.status || (h.result ?? 'SUCCESS')).toUpperCase();
+    return {
+      id: h.id,
+      tenantId: h.tenantId,
+      tenantName: h.tenantName || (h.tenantId ? `Tenant #${h.tenantId}` : '-'),
+      artifactId: h.artifactId,
+      artifactName: h.artifactName || (h.artifactId ? `Artifact #${h.artifactId}` : '-'),
+      messageId: h.messageId,
+      storageType: h.storageType,
+      storageName: h.storageName,
+      status: statusValue,
+      statusMessage: h.statusMessage || h.responseMessage,
+      reprocessedAt: repTime,
+      reprocessedBy: h.reprocessedBy || h.executedBy || 'ADMIN',
+      deepLinkUrl: h.deepLinkUrl,
+      executedAt: repTime,
+      executedBy: h.reprocessedBy || h.executedBy || 'ADMIN',
+      result: statusValue as any,
+      responseCode: statusValue === 'SUCCESS' ? 200 : 500,
+      responseMessage: h.statusMessage || h.responseMessage
+    };
+  },
+
+  /** 재처리 히스토리 삭제 (DELETE /api/reprocess/histories/{id}) */
+  async deleteReprocessHistory(id: number): Promise<{ status: number }> {
+    const response = await fetch(`${API_BASE}/reprocess/histories/${id}`, {
+      method: 'DELETE'
+    });
+    // 인메모리 스토어 동기화
+    const idx = reprocessHistoryStore.findIndex(h => h.id === id);
+    if (idx !== -1) {
+      reprocessHistoryStore.splice(idx, 1);
+    }
+    return { status: response.status };
   },
   async getRules(projectId: number = 1): Promise<AppRule[]> {
     const backendRules = await fetchApi<any[]>(`/projects/${projectId}/rules`);
