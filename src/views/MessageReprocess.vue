@@ -59,6 +59,7 @@ const targetStorageType = ref<'DATASTORE' | 'JMS'>('DATASTORE');
 
 // 메시지 선택 중 반응형 감시자(Watchers) 연쇄 실행 방지 플래그
 const isSelectingLog = ref(false);
+const isLoadingSupportType = ref(false);
 
 // 실패 로그 관련 모든 상태 즉시 완전 초기화 (조회/조건변경 즉시 목록 제거)
 const clearAllFailureLogsState = () => {
@@ -77,14 +78,36 @@ watch(selectedArtifact, async (newArt) => {
   // 아티팩트 변경 즉시 기존 조회 결과 및 실패 목록 싹 지우기
   clearAllFailureLogsState();
 
-  if (newArt) {
+  if (newArt && currentTenant.value) {
+    isLoadingSupportType.value = true;
     try {
+      // 1. 등록된 저장소 매핑 정보 조회
+      const mappings = await apiService.getStorageMappings(currentTenant.value.id, newArt.artifactId);
+      const dsMapping = mappings.find(m => m.storageType === 'DATASTORE');
+      const jmsMapping = mappings.find(m => m.storageType === 'JMS');
+
+      if (dsMapping && dsMapping.storageName) newArt.dataStoreName = dsMapping.storageName;
+      if (jmsMapping && jmsMapping.storageName) newArt.queueName = jmsMapping.storageName;
+
+      // 2. 서버의 재처리 지원 유형 확인
       const type = await apiService.getReprocessSupportType(newArt.artifactId);
-      if (type) {
+
+      if (dsMapping && jmsMapping) {
+        newArt.reprocessType = 'BOTH';
+      } else if (jmsMapping && !dsMapping) {
+        newArt.reprocessType = 'JMS_ONLY';
+      } else if (dsMapping && !jmsMapping) {
+        newArt.reprocessType = 'DATASTORE_ONLY';
+      } else if (type && type !== 'NONE') {
         newArt.reprocessType = type;
+      } else {
+        newArt.reprocessType = 'DATASTORE_ONLY';
       }
     } catch (e) {
-      // ignore
+      // 조회 실패 시 기본적으로 DATASTORE_ONLY 유지 (미지원으로 단정짓지 않음)
+      newArt.reprocessType = 'DATASTORE_ONLY';
+    } finally {
+      isLoadingSupportType.value = false;
     }
 
     if (newArt.reprocessType === 'JMS_ONLY') {
@@ -263,7 +286,7 @@ const targetArtifactIdForLookup = computed(() => {
   return selectedArtifact.value?.artifactId || selectedArtifactId.value || selectedMplLog.value?.artifactId;
 });
 
-const canLookup = computed(() => !!targetArtifactIdForLookup.value && messageId.value.trim().length > 0 && currentReprocessType.value !== 'NONE');
+const canLookup = computed(() => !!targetArtifactIdForLookup.value && messageId.value.trim().length > 0);
 
 const lookupMessage = async () => {
   if (!canLookup.value || !currentTenant.value || !targetArtifactIdForLookup.value) return;
@@ -414,12 +437,24 @@ const openMappingModal = (type: 'DATASTORE' | 'JMS') => {
 };
 
 const handleMappingSaved = (updatedName: string) => {
-  if (activeMappingStorageType.value === 'DATASTORE' && selectedArtifact.value) {
-    selectedArtifact.value.dataStoreName = updatedName;
-  } else if (activeMappingStorageType.value === 'JMS' && selectedArtifact.value) {
-    selectedArtifact.value.queueName = updatedName;
+  if (selectedArtifact.value) {
+    if (activeMappingStorageType.value === 'DATASTORE') {
+      selectedArtifact.value.dataStoreName = updatedName;
+    } else if (activeMappingStorageType.value === 'JMS') {
+      selectedArtifact.value.queueName = updatedName;
+    }
+    // 저장소 설정에 따라 재처리 지원 유형 즉시 갱신
+    if (selectedArtifact.value.dataStoreName && selectedArtifact.value.queueName) {
+      selectedArtifact.value.reprocessType = 'BOTH';
+    } else if (selectedArtifact.value.queueName) {
+      selectedArtifact.value.reprocessType = 'JMS_ONLY';
+    } else {
+      selectedArtifact.value.reprocessType = 'DATASTORE_ONLY';
+    }
   }
-  lookupMessage();
+  if (messageId.value.trim() && canLookup.value) {
+    lookupMessage();
+  }
 };
 
 // ── 재처리 실행 ─────────────────────────────────────────────
@@ -715,43 +750,37 @@ const handleRefreshMplFailures = async () => {
           </div>
 
           <!-- 재처리 지원 유형 배지 & 저장소 정보 -->
-          <div v-if="isLoadingArtifacts" class="flex flex-col justify-center items-center rounded-xl border border-line-2 bg-surface-2 p-3 text-[12px] text-muted space-y-1">
+          <div v-if="isLoadingArtifacts || isLoadingSupportType" class="flex flex-col justify-center items-center rounded-xl border border-line-2 bg-surface-2 p-3 text-[12px] text-muted space-y-1">
             <RefreshCw class="h-4 w-4 animate-spin text-primary" />
-            <span>아티팩트 정보 로딩 중...</span>
+            <span>저장소 지원 정보 확인 중...</span>
           </div>
           <div v-else-if="selectedArtifact" class="flex flex-col justify-between rounded-xl border border-line-2 bg-surface-2 p-3">
             <div class="flex items-center justify-between">
-              <span class="text-[11.5px] font-semibold text-muted">재처리 지원 유형</span>
+              <span class="text-[11.5px] font-semibold text-muted">재처리 대상 저장소</span>
               <!-- 배지 -->
               <span
-                v-if="currentReprocessType === 'DATASTORE_ONLY'"
-                class="inline-flex items-center gap-1 rounded-full border border-pass-line bg-pass-bg px-2.5 py-0.5 font-mono text-[11px] font-bold text-pass"
-              >
-                <Database class="h-3 w-3" /> Data Store 전용
-              </span>
-              <span
-                v-else-if="currentReprocessType === 'JMS_ONLY'"
+                v-if="currentReprocessType === 'JMS_ONLY'"
                 class="inline-flex items-center gap-1 rounded-full border border-[#DDD6FE] bg-[#F5F3FF] px-2.5 py-0.5 font-mono text-[11px] font-bold text-[#7C3AED]"
               >
-                <Layers class="h-3 w-3" /> JMS Queue 전용
+                <Layers class="h-3 w-3" /> JMS Queue
               </span>
               <span
                 v-else-if="currentReprocessType === 'BOTH'"
                 class="inline-flex items-center gap-1 rounded-full border border-[#B9E6FE] bg-[#E0F2FE] px-2.5 py-0.5 font-mono text-[11px] font-bold text-[#0284C7]"
               >
-                <Database class="h-3 w-3" /> Data Store &amp; JMS 동시 지원
+                <Database class="h-3 w-3" /> Data Store &amp; JMS
               </span>
               <span
                 v-else
-                class="inline-flex items-center gap-1 rounded-full border border-line-2 bg-surface-2 px-2.5 py-0.5 font-mono text-[11px] font-bold text-muted"
+                class="inline-flex items-center gap-1 rounded-full border border-pass-line bg-pass-bg px-2.5 py-0.5 font-mono text-[11px] font-bold text-pass"
               >
-                재처리 미지원
+                <Database class="h-3 w-3" /> Data Store
               </span>
             </div>
 
             <!-- 매핑된 저장소 이름 및 변경 버튼 -->
             <div class="mt-2 text-[12px] space-y-1">
-              <div v-if="currentReprocessType === 'DATASTORE_ONLY' || currentReprocessType === 'BOTH'" class="flex items-center justify-between">
+              <div v-if="currentReprocessType === 'DATASTORE_ONLY' || currentReprocessType === 'BOTH' || currentReprocessType === 'NONE'" class="flex items-center justify-between">
                 <span class="text-muted font-mono">Store: {{ selectedArtifact.dataStoreName || selectedArtifact.artifact }}</span>
                 <button @click="openMappingModal('DATASTORE')" class="text-[11px] text-primary underline font-medium hover:text-primary-600">
                   매핑 변경
@@ -776,12 +805,6 @@ const handleRefreshMplFailures = async () => {
               특정 패키지나 아티팩트 필터 없이 테넌트 전체에서 최근 발생한 모든 실패 메시지(FAILED, ESCALATED, Custom Error)를 수집하여 표시합니다.
             </div>
           </div>
-        </div>
-
-        <!-- 미지원 안내 -->
-        <div v-if="searchScopeMode === 'artifact' && currentReprocessType === 'NONE'" class="flex items-center gap-2 rounded-xl border border-warn-line bg-warn-bg px-4 py-3 text-[12.5px] text-warn">
-          <AlertCircle class="h-4 w-4 shrink-0" />
-          <span>선택한 아티팩트는 Data Store 또는 JMS Queue 스텝이 없어 <b>본문(Body) 자동 복원 및 재전송이 불가능</b>합니다. 실패 메시지 이력 조회는 정상 지원됩니다.</span>
         </div>
 
         <!-- BOTH 타입일 때 저장소 선택 탭 -->
@@ -1065,14 +1088,8 @@ const handleRefreshMplFailures = async () => {
             <!-- 3. 본문 미조회 / 미존재 안내 -->
             <div v-else class="flex min-h-[220px] flex-col items-center justify-center text-[12.5px] text-faint border border-dashed border-line rounded-xl p-6 text-center space-y-1 bg-surface-2/20">
               <FileText class="h-6 w-6 text-muted mb-1" />
-              <template v-if="currentReprocessType === 'NONE'">
-                <div class="font-medium text-warn">저장소(Data Store / JMS) 미지원 아티팩트</div>
-                <div class="text-[11.5px] text-muted">해당 iFlow에는 에러 메시지 보관 스텝이 없어 원본 Body 자동 복원이 불가능합니다.</div>
-              </template>
-              <template v-else>
-                <div class="font-medium text-ink">{{ lookupResult?.notFoundReason || 'Message ID를 조회하면 원본 본문이 표시됩니다' }}</div>
-                <div class="text-[11.5px] text-muted">선택한 저장소에서 해당 ID의 페이로드가 검색되면 포맷팅된 본문이 이곳에 출력됩니다.</div>
-              </template>
+              <div class="font-medium text-ink">{{ lookupResult?.notFoundReason || 'Message ID를 조회하면 원본 본문이 표시됩니다' }}</div>
+              <div class="text-[11.5px] text-muted">선택한 저장소에서 해당 ID의 페이로드가 검색되면 포맷팅된 본문이 이곳에 출력됩니다.</div>
             </div>
           </div>
 

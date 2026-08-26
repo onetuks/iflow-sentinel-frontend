@@ -178,18 +178,20 @@ export const apiService = {
         const sapId = String(item.artifactId || item.id || item.artifactName || `artifact-${idx + 1}`);
         const nameUpper = (item.artifactName || item.artifactId || '').toUpperCase();
 
-        // 파서 정규화 결과에 따른 재처리 지원 유형 추정 (mocking 및 백엔드 확장 준비)
-        let reprocessType: ReprocessSupportType = 'DATASTORE_ONLY';
+        // 백엔드 파서 결과 및 저장소 매핑 정보 우선 반영
+        let reprocessType: ReprocessSupportType = item.reprocessType || 'DATASTORE_ONLY';
         let dataStoreName = item.dataStoreName || nameUpper.replace(/[^A-Z0-9_]/g, '_');
         let queueName = item.queueName || `Q_${nameUpper.replace(/[^A-Z0-9_]/g, '_')}`;
         let expireDays = item.expireDays || 90;
 
-        if (nameUpper.includes('JMS') && nameUpper.includes('STORE')) {
+        if (item.reprocessType) {
+          reprocessType = item.reprocessType;
+        } else if (item.dataStoreName && item.queueName) {
           reprocessType = 'BOTH';
-        } else if (nameUpper.includes('JMS') || nameUpper.includes('QUEUE')) {
+        } else if (item.queueName && !item.dataStoreName) {
           reprocessType = 'JMS_ONLY';
-        } else if (nameUpper.includes('NO_STORE') || nameUpper.includes('DIRECT')) {
-          reprocessType = 'NONE';
+        } else if (item.dataStoreName) {
+          reprocessType = 'DATASTORE_ONLY';
         }
 
         return {
@@ -280,7 +282,8 @@ export const apiService = {
   async getReprocessSupportType(artifactId: string): Promise<ReprocessSupportType> {
     if (!artifactId) return 'DATASTORE_ONLY';
     try {
-      return await fetchApi<ReprocessSupportType>(`/reprocess/artifacts/${encodeURIComponent(artifactId)}/support-type`);
+      const type = await fetchApi<ReprocessSupportType>(`/reprocess/artifacts/${encodeURIComponent(artifactId)}/support-type`);
+      return (type && type !== 'NONE') ? type : 'DATASTORE_ONLY';
     } catch (e) {
       return 'DATASTORE_ONLY';
     }
