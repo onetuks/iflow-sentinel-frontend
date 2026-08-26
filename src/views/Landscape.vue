@@ -51,6 +51,7 @@ const currentTenant = ref<{
   clientId: string;
   clientSecret: string;
   tokenUrl: string;
+  interfaceUrl?: string;
   interfaceClientId?: string;
   interfaceClientSecret?: string;
   interfaceTokenUrl?: string;
@@ -61,6 +62,7 @@ const currentTenant = ref<{
   clientId: '',
   clientSecret: '',
   tokenUrl: '',
+  interfaceUrl: '',
   interfaceClientId: '',
   interfaceClientSecret: '',
   interfaceTokenUrl: ''
@@ -134,6 +136,7 @@ const handleTestConnection = async () => {
   isTesting.value = true;
   testResult.value = '확인 중…';
   try {
+    const ifUrl = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceUrl : (currentTenant.value.interfaceUrl || '');
     const ifClientId = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientId : currentTenant.value.clientId;
     const ifClientSecret = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientSecret : currentTenant.value.clientSecret;
     const ifTokenUrl = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceTokenUrl : currentTenant.value.tokenUrl;
@@ -146,9 +149,11 @@ const handleTestConnection = async () => {
       clientId: currentTenant.value.clientId,
       clientSecret: currentTenant.value.clientSecret,
       tokenUrl: currentTenant.value.tokenUrl,
+      interfaceUrl: ifUrl,
       interfaceClientId: ifClientId,
       interfaceClientSecret: ifClientSecret,
       interfaceTokenUrl: ifTokenUrl,
+      runtimeUrl: ifUrl,
       runtimeClientId: ifClientId,
       runtimeClientSecret: ifClientSecret,
       runtimeTokenUrl: ifTokenUrl,
@@ -180,6 +185,7 @@ const handleAddTenantClick = () => {
     clientId: '',
     clientSecret: '',
     tokenUrl: '',
+    interfaceUrl: '',
     interfaceClientId: '',
     interfaceClientSecret: '',
     interfaceTokenUrl: ''
@@ -195,7 +201,14 @@ const handleAddTenantClick = () => {
 
 const handleEditTenantClick = async (tenant: Tenant) => {
   tenantFormMode.value = 'edit';
-  const hasSeparateAuth = !!(tenant.interfaceClientId || tenant.interfaceTokenUrl || tenant.runtimeClientId || tenant.runtimeTokenUrl);
+  const hasSeparateAuth = !!(
+    tenant.interfaceUrl ||
+    tenant.runtimeUrl ||
+    tenant.interfaceClientId ||
+    tenant.interfaceTokenUrl ||
+    tenant.runtimeClientId ||
+    tenant.runtimeTokenUrl
+  );
   currentTenant.value = {
     id: tenant.id,
     name: tenant.name,
@@ -204,6 +217,7 @@ const handleEditTenantClick = async (tenant: Tenant) => {
     clientId: tenant.clientId,
     clientSecret: tenant.clientSecret || '',
     tokenUrl: tenant.tokenUrl,
+    interfaceUrl: tenant.interfaceUrl || tenant.runtimeUrl || '',
     interfaceClientId: tenant.interfaceClientId || tenant.runtimeClientId || '',
     interfaceClientSecret: tenant.interfaceClientSecret || tenant.runtimeClientSecret || '',
     interfaceTokenUrl: tenant.interfaceTokenUrl || tenant.runtimeTokenUrl || ''
@@ -228,6 +242,7 @@ const handleSaveTenant = async () => {
     return;
   }
   
+  const ifUrl = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceUrl : (currentTenant.value.interfaceUrl || '');
   const ifClientId = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientId : currentTenant.value.clientId;
   const ifClientSecret = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientSecret : currentTenant.value.clientSecret;
   const ifTokenUrl = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceTokenUrl : currentTenant.value.tokenUrl;
@@ -239,9 +254,11 @@ const handleSaveTenant = async () => {
     clientId: currentTenant.value.clientId,
     clientSecret: currentTenant.value.clientSecret,
     tokenUrl: currentTenant.value.tokenUrl,
+    interfaceUrl: ifUrl,
     interfaceClientId: ifClientId,
     interfaceClientSecret: ifClientSecret,
     interfaceTokenUrl: ifTokenUrl,
+    runtimeUrl: ifUrl,
     runtimeClientId: ifClientId,
     runtimeClientSecret: ifClientSecret,
     runtimeTokenUrl: ifTokenUrl,
@@ -523,7 +540,11 @@ const getBadgeClass = (tenant: Tenant) => {
 
               <div v-if="useSeparateInterfaceAuth" class="grid grid-cols-1 gap-3 pt-1 border-t border-line/60">
                 <div class="text-[11px] text-muted leading-relaxed">
-                  재처리 실행 시 타겟 IFlow 런타임 엔드포인트를 호출할 수 있는 권한을 가진 인증정보를 입력합니다.
+                  재처리 실행 시 타겟 IFlow 런타임 엔드포인트를 호출할 수 있는 런타임 URL 및 인증정보를 입력합니다.
+                </div>
+                <div>
+                  <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Runtime URL (인터페이스 호출 주소)</label>
+                  <input type="text" v-model="currentTenant.interfaceUrl" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15" placeholder="예: https://eXXXX-iflmap.hcisbp.eu1.hana.ondemand.com (또는 https://...-rt...)" />
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                   <div>

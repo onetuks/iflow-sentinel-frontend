@@ -29,7 +29,7 @@ const tenants = ref<Tenant[]>([]);
 const activeTenantId = ref<number | ''>('');
 const allArtifacts = ref<TrackerArtifact[]>([]);
 const selectedPackage = ref('');
-const selectedArtifactId = ref<number | string | ''>('');
+const selectedArtifactId = ref<string>('');
 const isLoadingArtifacts = ref(false);
 
 const currentTenant = computed(() => tenants.value.find(t => t.id === activeTenantId.value));
@@ -47,7 +47,7 @@ const availableArtifacts = computed(() => {
 });
 
 const selectedArtifact = computed(() =>
-  allArtifacts.value.find(a => String(a.id) === String(selectedArtifactId.value))
+  allArtifacts.value.find(a => a.artifactId === selectedArtifactId.value)
 );
 
 // ── 아티팩트 재처리 지원 유형 및 저장소 정보 ───────────────────
@@ -79,7 +79,7 @@ watch(selectedArtifact, async (newArt) => {
 
   if (newArt) {
     try {
-      const type = await apiService.getReprocessSupportType(newArt.id);
+      const type = await apiService.getReprocessSupportType(newArt.artifactId);
       if (type) {
         newArt.reprocessType = type;
       }
@@ -144,7 +144,7 @@ watch(activeTenantId, async () => {
 watch(selectedPackage, () => {
   if (isSelectingLog.value) return;
   clearAllFailureLogsState();
-  selectedArtifactId.value = availableArtifacts.value.length > 0 ? availableArtifacts.value[0].id : '';
+  selectedArtifactId.value = availableArtifacts.value.length > 0 ? availableArtifacts.value[0].artifactId : '';
 });
 
 onMounted(async () => {
@@ -190,7 +190,7 @@ const fetchMplFailures = async () => {
   try {
     const targetArtifactId = searchScopeMode.value === 'tenant_all'
       ? undefined 
-      : (selectedArtifact.value?.artifactId || selectedArtifact.value?.artifact || selectedArtifactId.value);
+      : (selectedArtifact.value?.artifactId || selectedArtifactId.value);
 
     const logs = await apiService.getMplFailureLogs(currentTenant.value.id, targetArtifactId);
 
@@ -228,7 +228,6 @@ const selectMplLog = async (log: MplFailureLog, fromFetchRequestId?: number) => 
     // 전체 전수 조사 모드이거나 아티팩트 미선택 시, 해당 실패 로그의 아티팩트를 자동 매칭
     if (log.artifactId && allArtifacts.value.length > 0) {
       const matched = allArtifacts.value.find(a => 
-        String(a.id) === String(log.artifactId) || 
         a.artifactId === log.artifactId || 
         a.artifact === log.artifactId
       );
@@ -240,8 +239,8 @@ const selectMplLog = async (log: MplFailureLog, fromFetchRequestId?: number) => 
         if (matched.package && selectedPackage.value !== matched.package) {
           selectedPackage.value = matched.package;
         }
-        if (selectedArtifactId.value !== matched.id) {
-          selectedArtifactId.value = matched.id;
+        if (selectedArtifactId.value !== matched.artifactId) {
+          selectedArtifactId.value = matched.artifactId;
         }
       }
     }
@@ -261,7 +260,7 @@ const isLooking = ref(false);
 const lookupResult = ref<DataStoreEntryLookupResult | null>(null);
 
 const targetArtifactIdForLookup = computed(() => {
-  return selectedArtifact.value?.dbId || selectedArtifactId.value || selectedMplLog.value?.artifactId;
+  return selectedArtifact.value?.artifactId || selectedArtifactId.value || selectedMplLog.value?.artifactId;
 });
 
 const canLookup = computed(() => !!targetArtifactIdForLookup.value && messageId.value.trim().length > 0 && currentReprocessType.value !== 'NONE');
@@ -444,7 +443,7 @@ const executeReprocess = async () => {
 
     executionResult.value = await apiService.executeReprocess({
       tenantId: currentTenant.value.id,
-      artifactId: selectedArtifact.value?.dbId || selectedArtifactId.value,
+      artifactId: selectedArtifact.value?.artifactId || selectedArtifactId.value,
       messageId: messageId.value.trim(),
       storageType: targetStorageType.value,
       storageName: effectiveStorageName,
@@ -530,7 +529,7 @@ const handleGlobalRefresh = async () => {
         if (prevPackage && availablePackages.value.includes(prevPackage)) {
           selectedPackage.value = prevPackage;
         }
-        if (prevArtifactId && availableArtifacts.value.some(a => String(a.id) === String(prevArtifactId))) {
+        if (prevArtifactId && availableArtifacts.value.some(a => a.artifactId === prevArtifactId)) {
           selectedArtifactId.value = prevArtifactId;
         }
       } finally {
@@ -711,7 +710,7 @@ const handleRefreshMplFailures = async () => {
             >
               <option v-if="isLoadingArtifacts" value="">아티팩트 목록 조회 중...</option>
               <option v-else-if="availableArtifacts.length === 0" value="">등록된 아티팩트 없음</option>
-              <option v-for="a in availableArtifacts" :key="a.id" :value="a.id">{{ a.artifact }}</option>
+              <option v-for="a in availableArtifacts" :key="a.artifactId" :value="a.artifactId">{{ a.artifact }}</option>
             </select>
           </div>
 
@@ -782,7 +781,7 @@ const handleRefreshMplFailures = async () => {
         <!-- 미지원 안내 -->
         <div v-if="searchScopeMode === 'artifact' && currentReprocessType === 'NONE'" class="flex items-center gap-2 rounded-xl border border-warn-line bg-warn-bg px-4 py-3 text-[12.5px] text-warn">
           <AlertCircle class="h-4 w-4 shrink-0" />
-          <span>선택한 아티팩트는 Data Store 또는 JMS Queue 스텝이 없어 <b>자동 조회가 불가능</b>합니다. MPL 상세 로그에서 원본 Body를 직접 확인해 주세요.</span>
+          <span>선택한 아티팩트는 Data Store 또는 JMS Queue 스텝이 없어 <b>본문(Body) 자동 복원 및 재전송이 불가능</b>합니다. 실패 메시지 이력 조회는 정상 지원됩니다.</span>
         </div>
 
         <!-- BOTH 타입일 때 저장소 선택 탭 -->
@@ -830,7 +829,7 @@ const handleRefreshMplFailures = async () => {
       </div>
 
       <!-- 메시지 선택 (최근 MPL 실패 목록 / 수동 ID 입력) -->
-      <div v-if="searchScopeMode === 'tenant_all' || currentReprocessType !== 'NONE'" class="rounded-2xl border border-line bg-surface shadow-sm overflow-hidden">
+      <div class="rounded-2xl border border-line bg-surface shadow-sm overflow-hidden">
         <div class="flex items-center justify-between border-b border-line px-5 py-3 bg-surface-2">
           <div class="flex items-center gap-2">
             <FileText class="h-4 w-4 text-primary" />
@@ -1066,8 +1065,14 @@ const handleRefreshMplFailures = async () => {
             <!-- 3. 본문 미조회 / 미존재 안내 -->
             <div v-else class="flex min-h-[220px] flex-col items-center justify-center text-[12.5px] text-faint border border-dashed border-line rounded-xl p-6 text-center space-y-1 bg-surface-2/20">
               <FileText class="h-6 w-6 text-muted mb-1" />
-              <div class="font-medium text-ink">{{ lookupResult?.notFoundReason || 'Message ID를 조회하면 원본 본문이 표시됩니다' }}</div>
-              <div class="text-[11.5px] text-muted">선택한 저장소에서 해당 ID의 페이로드가 검색되면 포맷팅된 본문이 이곳에 출력됩니다.</div>
+              <template v-if="currentReprocessType === 'NONE'">
+                <div class="font-medium text-warn">저장소(Data Store / JMS) 미지원 아티팩트</div>
+                <div class="text-[11.5px] text-muted">해당 iFlow에는 에러 메시지 보관 스텝이 없어 원본 Body 자동 복원이 불가능합니다.</div>
+              </template>
+              <template v-else>
+                <div class="font-medium text-ink">{{ lookupResult?.notFoundReason || 'Message ID를 조회하면 원본 본문이 표시됩니다' }}</div>
+                <div class="text-[11.5px] text-muted">선택한 저장소에서 해당 ID의 페이로드가 검색되면 포맷팅된 본문이 이곳에 출력됩니다.</div>
+              </template>
             </div>
           </div>
 
@@ -1265,7 +1270,7 @@ const handleRefreshMplFailures = async () => {
       :is-open="isMappingModalOpen"
       :tenant-id="currentTenant?.id || 0"
       :tenant-name="currentTenant?.name || ''"
-      :artifact-id="selectedArtifact?.id || ''"
+      :artifact-id="selectedArtifact?.artifactId || ''"
       :artifact-name="selectedArtifact?.artifact || ''"
       :storage-type="activeMappingStorageType"
       :default-detected-name="activeMappingStorageType === 'DATASTORE' ? selectedArtifact?.dataStoreName : selectedArtifact?.queueName"

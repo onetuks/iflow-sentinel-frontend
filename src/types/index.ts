@@ -17,10 +17,12 @@ export interface Tenant {
   logLevel?: 'INFO' | 'DEBUG' | 'TRACE' | 'WARN' | 'ERROR' | 'NONE';
   emailConfig?: TenantEmailConfig;
   // 인터페이스(런타임/재처리) 호출 권한용 인증 정보
+  interfaceUrl?: string;
   interfaceClientId?: string;
   interfaceClientSecret?: string;
   interfaceTokenUrl?: string;
   // 하위 호환 및 백엔드 DTO 매핑
+  runtimeUrl?: string;
   runtimeClientId?: string;
   runtimeClientSecret?: string;
   runtimeTokenUrl?: string;
@@ -111,8 +113,6 @@ export interface Project {
 export type ReprocessSupportType = 'NONE' | 'DATASTORE_ONLY' | 'JMS_ONLY' | 'BOTH';
 
 export interface TrackerArtifact {
-  id: number | string;
-  dbId?: number;
   artifactId: string;
   package: string;
   artifact: string;
@@ -146,7 +146,7 @@ export interface MplFailureLog {
 export interface StorageMapping {
   id?: number;
   tenantId: number;
-  artifactId: number | string;
+  artifactId: string;
   storageType: 'DATASTORE' | 'JMS';
   storageName: string;
   expireDays?: number;
@@ -185,7 +185,7 @@ export interface DataStoreEntryLookupResult {
 /** 메시지 재처리 실행 요청 (Backend MessageReprocessRequest 규격 매핑) */
 export interface MessageReprocessRequest {
   tenantId: number;
-  artifactId: number;
+  artifactId: string;
   messageId: string;
   storageType: 'DATASTORE' | 'JMS';
   storageName: string;
@@ -215,7 +215,7 @@ export interface ReprocessHistoryEntry {
   id: number;
   tenantId?: number;
   tenantName?: string;
-  artifactId?: number | string;
+  artifactId?: string;
   artifactName?: string;
   messageId: string;
   storageType: 'DATASTORE' | 'JMS';

@@ -149,13 +149,13 @@ const filteredArtifacts = computed(() => {
   return result;
 });
 
-const selectedIds = ref<(number | string)[]>([]);
+const selectedIds = ref<string[]>([]);
 
 const toggleSelectAll = () => {
   if (selectedIds.value.length === filteredArtifacts.value.length && filteredArtifacts.value.length > 0) {
     selectedIds.value = [];
   } else {
-    selectedIds.value = filteredArtifacts.value.map(a => a.id);
+    selectedIds.value = filteredArtifacts.value.map(a => a.artifactId);
   }
 };
 
@@ -179,7 +179,7 @@ const exportToExcel = async () => {
 
   isExporting.value = true;
   try {
-    const selectedArtifactIds = items.map(item => String(item.artifactId || item.id));
+    const selectedArtifactIds = items.map(item => item.artifactId);
     const blob = await apiService.exportArtifactsExcel(currentTenant.id, selectedArtifactIds);
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -199,7 +199,7 @@ const exportToExcel = async () => {
 };
 
 const getSelectedArtifacts = () => {
-  return artifacts.value.filter(a => selectedIds.value.includes(a.id));
+  return artifacts.value.filter(a => selectedIds.value.includes(a.artifactId));
 };
 
 const deploySelected = async () => {
@@ -216,7 +216,7 @@ const deploySelected = async () => {
   isLoading.value = true;
   try {
     for (const item of items) {
-      const targetArtifactId = item.artifactId || String(item.id);
+      const targetArtifactId = item.artifactId;
       await apiService.deployTrackerArtifact(currentTenant.id, targetArtifactId);
     }
     alert('Deploy 작업이 완료되었습니다. 최신 목록으로 새로고침합니다.');
@@ -244,7 +244,7 @@ const undeploySelected = async () => {
   isLoading.value = true;
   try {
     for (const item of items) {
-      const targetArtifactId = item.artifactId || String(item.id);
+      const targetArtifactId = item.artifactId;
       await apiService.undeployTrackerArtifact(currentTenant.id, targetArtifactId);
     }
     alert('Undeploy 작업이 완료되었습니다. 최신 목록으로 새로고침합니다.');
@@ -272,7 +272,7 @@ const deleteSelected = async () => {
   isLoading.value = true;
   try {
     for (const item of items) {
-      const targetArtifactId = item.artifactId || String(item.id);
+      const targetArtifactId = item.artifactId;
       const version = item.runtime !== '-' ? item.runtime : '1.0.0';
       await apiService.deleteTrackerArtifact(currentTenant.id, targetArtifactId, version);
     }
@@ -486,14 +486,14 @@ const deleteSelected = async () => {
             <tr 
               v-else
               v-for="item in filteredArtifacts" 
-              :key="item.id" 
+              :key="item.artifactId" 
               class="transition hover:bg-surface-2 group border-b border-line/50 last:border-b-0"
-              :class="{'bg-primary-tint/30 hover:bg-primary-tint/40': selectedIds.includes(item.id)}"
+              :class="{'bg-primary-tint/30 hover:bg-primary-tint/40': selectedIds.includes(item.artifactId)}"
             >
               <td class="px-4.5 py-3.5 text-center align-middle">
                 <input 
                   type="checkbox" 
-                  :value="item.id" 
+                  :value="item.artifactId" 
                   v-model="selectedIds" 
                   class="h-4 w-4 rounded border-line text-primary focus:ring-primary cursor-pointer accent-primary"
                 />

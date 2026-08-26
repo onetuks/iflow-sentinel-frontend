@@ -175,8 +175,7 @@ export const apiService = {
         else if (st === 'ILLUSION') statusDisplay = 'Illusion';
         else statusDisplay = 'Undeployed';
 
-        const dbId = typeof item.id === 'number' ? item.id : (typeof item.id === 'string' && !isNaN(Number(item.id)) ? Number(item.id) : undefined);
-        const sapId = item.artifactId || item.id || String(idx + 1);
+        const sapId = String(item.artifactId || item.id || item.artifactName || `artifact-${idx + 1}`);
         const nameUpper = (item.artifactName || item.artifactId || '').toUpperCase();
 
         // 파서 정규화 결과에 따른 재처리 지원 유형 추정 (mocking 및 백엔드 확장 준비)
@@ -194,12 +193,10 @@ export const apiService = {
         }
 
         return {
-          id: sapId,
-          dbId: dbId,
           artifactId: sapId,
-          package: item.packageName || item.packageId || '-',
-          artifact: item.artifactName || item.artifactId || '-',
-          runtime: item.version || item.runtimeStatus || '-',
+          package: item.packageName || item.packageId || item.package || '-',
+          artifact: item.artifactName || item.artifactId || item.artifact || '-',
+          runtime: item.version || item.runtimeStatus || item.runtime || '-',
           status: statusDisplay,
           endpointUrl: item.endpointUrl || `/cxf/http/${item.artifactName || sapId}`,
           reprocessType,
@@ -280,23 +277,22 @@ export const apiService = {
   // ── 메시지 재처리 (MessageReprocessController API 연동) ────────────
 
   /** 아티팩트의 재처리 지원 유형 조회 (GET /api/reprocess/artifacts/{artifactId}/support-type) */
-  async getReprocessSupportType(artifactId: number | string): Promise<ReprocessSupportType> {
-    const targetId = toLongId(artifactId);
-    if (!targetId) return 'DATASTORE_ONLY';
+  async getReprocessSupportType(artifactId: string): Promise<ReprocessSupportType> {
+    if (!artifactId) return 'DATASTORE_ONLY';
     try {
-      return await fetchApi<ReprocessSupportType>(`/reprocess/artifacts/${targetId}/support-type`);
+      return await fetchApi<ReprocessSupportType>(`/reprocess/artifacts/${encodeURIComponent(artifactId)}/support-type`);
     } catch (e) {
       return 'DATASTORE_ONLY';
     }
   },
 
   /** 최근 MPL 실패 로그 목록 조회 (GET /api/reprocess/mpl-failures?tenantId={tenantId}&artifactId={artifactId}&top={top}) */
-  async getMplFailureLogs(tenantId: number | string, artifactId?: string | number, top: number = 20): Promise<MplFailureLog[]> {
+  async getMplFailureLogs(tenantId: number | string, artifactId?: string, top: number = 20): Promise<MplFailureLog[]> {
     const tId = toLongId(tenantId) || 1;
     try {
       let url = `/reprocess/mpl-failures?tenantId=${tId}&top=${top}`;
       if (artifactId !== undefined && artifactId !== null && String(artifactId).trim() !== '') {
-        url += `&artifactId=${encodeURIComponent(String(artifactId))}`;
+        url += `&artifactId=${encodeURIComponent(String(artifactId).trim())}`;
       }
       const rawLogs = await fetchApi<any[]>(url);
       return (rawLogs || []).map(log => ({
@@ -321,15 +317,14 @@ export const apiService = {
   },
 
   /** 저장소 매핑 목록 조회 (GET /api/reprocess/storage-mappings?tenantId={tenantId}&artifactId={artifactId}) */
-  async getStorageMappings(tenantId: number | string, artifactId: string | number): Promise<StorageMapping[]> {
+  async getStorageMappings(tenantId: number | string, artifactId: string): Promise<StorageMapping[]> {
     const tId = toLongId(tenantId) || 1;
-    const aId = toLongId(artifactId) || 1;
     try {
-      const dtos = await fetchApi<any[]>(`/reprocess/storage-mappings?tenantId=${tId}&artifactId=${aId}`);
+      const dtos = await fetchApi<any[]>(`/reprocess/storage-mappings?tenantId=${tId}&artifactId=${encodeURIComponent(artifactId)}`);
       return (dtos || []).map(d => ({
         id: d.id,
         tenantId: d.tenantId,
-        artifactId: d.artifactId,
+        artifactId: String(d.artifactId),
         storageType: d.storageType,
         storageName: d.storageName,
         expireDays: d.expireDays,
@@ -345,7 +340,7 @@ export const apiService = {
   },
 
   /** 단일 저장소 매핑 조회 */
-  async getStorageMapping(tenantId: number | string, artifactId: string | number, storageType: 'DATASTORE' | 'JMS'): Promise<StorageMapping> {
+  async getStorageMapping(tenantId: number | string, artifactId: string, storageType: 'DATASTORE' | 'JMS'): Promise<StorageMapping> {
     try {
       const mappings = await this.getStorageMappings(tenantId, artifactId);
       const found = mappings.find(m => m.storageType === storageType);
@@ -374,7 +369,7 @@ export const apiService = {
   async saveStorageMapping(mapping: StorageMapping): Promise<StorageMapping> {
     const dto = {
       tenantId: toLongId(mapping.tenantId) || 1,
-      artifactId: toLongId(mapping.artifactId) || 1,
+      artifactId: String(mapping.artifactId),
       storageType: mapping.storageType,
       storageName: mapping.storageName || mapping.overrideName || mapping.suggestedName || mapping.detectedName,
       expireDays: mapping.expireDays || 90
@@ -402,11 +397,10 @@ export const apiService = {
   },
 
   /** 저장소 매핑 삭제 (DELETE /api/reprocess/storage-mappings?tenantId={tenantId}&artifactId={artifactId}) */
-  async deleteStorageMapping(tenantId: number | string, artifactId: string | number): Promise<void> {
+  async deleteStorageMapping(tenantId: number | string, artifactId: string): Promise<void> {
     const tId = toLongId(tenantId) || 1;
-    const aId = toLongId(artifactId) || 1;
     try {
-      await fetchApi<void>(`/reprocess/storage-mappings?tenantId=${tId}&artifactId=${aId}`, {
+      await fetchApi<void>(`/reprocess/storage-mappings?tenantId=${tId}&artifactId=${encodeURIComponent(artifactId)}`, {
         method: 'DELETE'
       });
     } catch (e) {
@@ -417,15 +411,14 @@ export const apiService = {
   /** 메시지 Body 조회 (GET /api/reprocess/messages/{messageId}/body?tenantId={tenantId}&artifactId={artifactId}&storageType={storageType}&storageName={storageName}) */
   async lookupDataStoreEntry(
     tenantId: number | string,
-    artifactId: number | string,
+    artifactId: string,
     messageId: string,
     storageType: 'DATASTORE' | 'JMS' = 'DATASTORE',
     storageName?: string
   ): Promise<DataStoreEntryLookupResult> {
     const tId = toLongId(tenantId) || 1;
-    const aId = toLongId(artifactId) || 1;
     try {
-      let url = `/reprocess/messages/${encodeURIComponent(messageId)}/body?tenantId=${tId}&artifactId=${aId}&storageType=${storageType}`;
+      let url = `/reprocess/messages/${encodeURIComponent(messageId)}/body?tenantId=${tId}&artifactId=${encodeURIComponent(artifactId)}&storageType=${storageType}`;
       if (storageName && storageName.trim()) {
         url += `&storageName=${encodeURIComponent(storageName.trim())}`;
       }
@@ -477,7 +470,7 @@ export const apiService = {
   /** 메시지 재처리 실행 (POST /api/reprocess/execute) */
   async executeReprocess(payload: {
     tenantId: number | string;
-    artifactId: number | string;
+    artifactId: string;
     messageId: string;
     storageType?: 'DATASTORE' | 'JMS';
     storageName?: string;
@@ -487,7 +480,7 @@ export const apiService = {
   }): Promise<ReprocessExecutionResult> {
     const requestBody = {
       tenantId: toLongId(payload.tenantId) || 1,
-      artifactId: toLongId(payload.artifactId) || 1,
+      artifactId: String(payload.artifactId),
       messageId: payload.messageId,
       storageType: payload.storageType || 'DATASTORE',
       storageName: payload.storageName,
@@ -505,7 +498,7 @@ export const apiService = {
         id: res.historyId || Date.now(),
         tenantId: Number(payload.tenantId),
         tenantName: payload.tenantName || `Tenant #${payload.tenantId}`,
-        artifactId: payload.artifactId,
+        artifactId: String(payload.artifactId),
         artifactName: payload.artifactName || `Artifact #${payload.artifactId}`,
         messageId: payload.messageId,
         storageType: payload.storageType || 'DATASTORE',
@@ -549,7 +542,7 @@ export const apiService = {
   /** 메시지 재처리 히스토리 목록 조회 (GET /api/reprocess/histories?tenantId={tenantId}&artifactId={artifactId}&messageId={messageId}&status={status}) */
   async getReprocessHistories(params?: {
     tenantId?: number | string;
-    artifactId?: number | string;
+    artifactId?: string;
     messageId?: string;
     status?: string;
   }): Promise<ReprocessHistoryEntry[]> {
@@ -559,9 +552,8 @@ export const apiService = {
         const tId = toLongId(params.tenantId);
         if (tId) queryParts.push(`tenantId=${tId}`);
       }
-      if (params?.artifactId) {
-        const aId = toLongId(params.artifactId);
-        if (aId) queryParts.push(`artifactId=${aId}`);
+      if (params?.artifactId && params.artifactId.trim()) {
+        queryParts.push(`artifactId=${encodeURIComponent(params.artifactId.trim())}`);
       }
       if (params?.messageId && params.messageId.trim()) {
         queryParts.push(`messageId=${encodeURIComponent(params.messageId.trim())}`);
@@ -609,7 +601,7 @@ export const apiService = {
   },
 
   /** 메시지 재처리 이력 목록 조회 (하위 호환 유지) */
-  async getReprocessHistory(paramsOrTenantId?: number | { tenantId?: number | string; artifactId?: number | string; messageId?: string; status?: string }): Promise<ReprocessHistoryEntry[]> {
+  async getReprocessHistory(paramsOrTenantId?: number | { tenantId?: number | string; artifactId?: string; messageId?: string; status?: string }): Promise<ReprocessHistoryEntry[]> {
     if (typeof paramsOrTenantId === 'number') {
       return this.getReprocessHistories({ tenantId: paramsOrTenantId });
     }

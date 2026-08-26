@@ -114,8 +114,49 @@ watch(isCollapsed, (newVal) => {
 
 const projects = computed(() => props.projects || []);
 
+// 프로젝트 이름 기반 핵심 알파벳/문자 이니셜 추출
+const getProjectInitial = (name?: string): string => {
+  if (!name) return 'P';
+  // 앞단의 특수문자 등을 제거하고 첫 글자 추출
+  const cleaned = name.trim().replace(/^[^a-zA-Z0-9가-힣]+/, '');
+  const char = cleaned.charAt(0);
+  return char ? char.toUpperCase() : 'P';
+};
+
+// 고유하고 조화로운 컬러 팔레트 (Tailwind CSS 그라데이션 클래스)
+const GRADIENTS = [
+  'from-[#6366F1] to-[#4F46E5]', // Indigo
+  'from-[#3B82F6] to-[#1D4ED8]', // Blue
+  'from-[#0EA5E9] to-[#0284C7]', // Sky
+  'from-[#10B981] to-[#059669]', // Emerald
+  'from-[#8B5CF6] to-[#6D28D9]', // Purple
+  'from-[#EC4899] to-[#BE185D]', // Pink
+  'from-[#F59E0B] to-[#D97706]', // Amber
+  'from-[#06B6D4] to-[#0891B2]', // Cyan
+  'from-[#14B8A6] to-[#0F766E]', // Teal
+  'from-[#F43F5E] to-[#E11D48]', // Rose
+];
+
+// 프로젝트 이름 문자열 해시를 통해 일관된 배경 색상 결정
+const getProjectGradient = (name?: string): string => {
+  if (!name) return GRADIENTS[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % GRADIENTS.length;
+  return GRADIENTS[index];
+};
+
 const currentProjectData = computed(() => {
-  return projects.value.find(p => p.name === props.currentProject) || projects.value[0] || {};
+  const found = projects.value.find(p => p.name === props.currentProject) || projects.value[0] || { id: 0, name: props.currentProject || 'Default' };
+  const name = found.name || 'Default';
+  return {
+    ...found,
+    name,
+    initial: getProjectInitial(name),
+    gradient: getProjectGradient(name)
+  };
 });
 
 const selectProject = (projectName: string) => {
@@ -179,15 +220,18 @@ const selectProject = (projectName: string) => {
         <div 
           v-for="pj in projects" 
           :key="pj.name"
-          class="flex cursor-pointer items-center justify-between gap-2.5 rounded-lg px-2 py-2 hover:bg-surface-2 group"
+          :class="[
+            'flex cursor-pointer items-center justify-between gap-2.5 rounded-lg px-2 py-2 transition group',
+            pj.name === props.currentProject ? 'bg-primary-tint/70 text-primary-700 font-semibold' : 'hover:bg-surface-2 text-ink'
+          ]"
           @click="selectProject(pj.name)"
         >
           <div class="flex items-center gap-2.5 min-w-0">
             <span 
-              class="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md bg-gradient-to-br font-disp text-xs font-bold text-white"
-              :class="pj.gradient"
+              class="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg bg-gradient-to-br font-disp text-xs font-bold text-white shadow-sm"
+              :class="getProjectGradient(pj.name)"
             >
-              {{ pj.initial }}
+              {{ getProjectInitial(pj.name) }}
             </span>
             <b class="font-disp text-[13px] font-semibold truncate">{{ pj.name }}</b>
           </div>
@@ -356,15 +400,18 @@ const selectProject = (projectName: string) => {
         <div 
           v-for="pj in projects" 
           :key="pj.name"
-          class="flex cursor-pointer items-center justify-between gap-2.5 rounded-lg px-2 py-2 hover:bg-surface-2 transition group"
+          :class="[
+            'flex cursor-pointer items-center justify-between gap-2.5 rounded-lg px-2 py-2 transition group',
+            pj.name === props.currentProject ? 'bg-primary-tint/70 text-primary-700 font-semibold' : 'hover:bg-surface-2 text-ink'
+          ]"
           @click="selectProject(pj.name)"
         >
           <div class="flex items-center gap-2.5 min-w-0">
             <span 
-              class="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md bg-gradient-to-br font-disp text-xs font-bold text-white"
-              :class="pj.gradient"
+              class="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md bg-gradient-to-br font-disp text-xs font-bold text-white shadow-sm"
+              :class="getProjectGradient(pj.name)"
             >
-              {{ pj.initial }}
+              {{ getProjectInitial(pj.name) }}
             </span>
             <b class="font-disp text-[13px] font-semibold text-ink truncate">{{ pj.name }}</b>
           </div>

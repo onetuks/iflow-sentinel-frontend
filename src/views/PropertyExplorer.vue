@@ -108,7 +108,7 @@ const openPropertyModal = async (artifactItem: TrackerArtifact) => {
   }
 
   try {
-    const targetArtifactId = String(artifactItem.artifactId || artifactItem.id);
+    const targetArtifactId = artifactItem.artifactId;
     const version = artifactItem.runtime && artifactItem.runtime !== '-' ? artifactItem.runtime : '1.0.0';
     const configuredParams = await apiService.getConfiguredParameters(currentTenantObj.id, targetArtifactId, version);
     
@@ -213,7 +213,7 @@ const closeModal = () => {
             <tr 
               v-else
               v-for="item in filteredArtifacts" 
-              :key="item.id" 
+              :key="item.artifactId" 
               @click="openPropertyModal(item)"
               class="transition hover:bg-surface-2 cursor-pointer group border-b border-line/50 last:border-b-0"
             >

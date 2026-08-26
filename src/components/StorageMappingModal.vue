@@ -8,7 +8,7 @@ const props = defineProps<{
   isOpen: boolean;
   tenantId: number;
   tenantName: string;
-  artifactId: number | string;
+  artifactId: string;
   artifactName: string;
   storageType: 'DATASTORE' | 'JMS';
   defaultDetectedName?: string;
