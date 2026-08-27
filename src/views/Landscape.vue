@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, inject, computed, watch } from 'vue';
 import { apiService } from '../services/api';
-import type { Tenant, TenantEmailConfig, LogLevelType } from '../types';
+import type { Tenant, TenantEmailConfig, LogLevel } from '../types';
 import { 
   Plus, 
   Info, 
@@ -262,18 +262,19 @@ const applyJsonData = (autoTest: boolean = false) => {
 // --- Additional Tenant Features State (Log Level & Email Notification) ---
 const activeTab = ref<'logLevel' | 'email'>('logLevel');
 
-// 1. Log Level Batch State
-const selectedLogLevel = ref<LogLevelType>('INFO');
+// 1. Log Level Batch State (API.md: NONE, INFO, ERROR, DEBUG, TRACE)
+const selectedLogLevel = ref<LogLevel>('INFO');
+const currentSavedLogLevel = ref<LogLevel | null>(null);
+const isLoadingLogLevel = ref(false);
 const isApplyingLogLevel = ref(false);
 const logLevelResult = ref<{ success?: boolean; message?: string }>({});
 
-const availableLogLevels: { value: LogLevelType; label: string; desc: string; color: string }[] = [
+const availableLogLevels: { value: LogLevel; label: string; desc: string; color: string }[] = [
   { value: 'INFO', label: 'INFO', desc: '표준 모니터링 로그', color: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100' },
   { value: 'DEBUG', label: 'DEBUG', desc: '상세 디버그 분석', color: 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100' },
   { value: 'TRACE', label: 'TRACE', desc: '메시지 페이로드 트레이스', color: 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' },
-  { value: 'WARN', label: 'WARN', desc: '경고 및 주요 이벤트만', color: 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100' },
-  { value: 'ERROR', label: 'ERROR', desc: '실패 및 심각한 오류만', color: 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100' },
-  { value: 'NONE', label: 'NONE', desc: '로그 기록 최소화', color: 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100' },
+  { value: 'ERROR', label: 'ERROR', desc: '실패 및 오류 로그만', color: 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100' },
+  { value: 'NONE', label: 'NONE', desc: '로그 기록 비활성화', color: 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100' },
 ];
 
 // 2. Email Notification & SMTP Config State
@@ -311,6 +312,26 @@ const loadTenantEmailConfig = async (tenantId: number) => {
     }
   } catch (err) {
     console.error('Failed to load email config:', err);
+  }
+};
+
+const loadTenantLogLevel = async (tenantId: number) => {
+  isLoadingLogLevel.value = true;
+  try {
+    const config = await apiService.getTenantLogLevel(tenantId);
+    if (config && config.logLevel) {
+      selectedLogLevel.value = config.logLevel;
+      currentSavedLogLevel.value = config.logLevel;
+    } else {
+      currentSavedLogLevel.value = null;
+      selectedLogLevel.value = 'INFO';
+    }
+  } catch (err) {
+    console.error('Failed to load tenant log level:', err);
+    currentSavedLogLevel.value = null;
+    selectedLogLevel.value = 'INFO';
+  } finally {
+    isLoadingLogLevel.value = false;
   }
 };
 
@@ -388,6 +409,8 @@ const handleAddTenantClick = () => {
   logLevelResult.value = {};
   emailTestResult.value = {};
   emailSaveResult.value = {};
+  currentSavedLogLevel.value = null;
+  selectedLogLevel.value = 'INFO';
 };
 
 const handleEditTenantClick = async (tenant: Tenant) => {
@@ -420,10 +443,14 @@ const handleEditTenantClick = async (tenant: Tenant) => {
   logLevelResult.value = {};
   emailTestResult.value = {};
   emailSaveResult.value = {};
+  currentSavedLogLevel.value = null;
   selectedLogLevel.value = 'INFO';
 
   if (tenant.id) {
-    await loadTenantEmailConfig(tenant.id);
+    await Promise.all([
+      loadTenantEmailConfig(tenant.id),
+      loadTenantLogLevel(tenant.id)
+    ]);
   }
 };
 
@@ -527,6 +554,9 @@ const handleApplyLogLevelBatch = async () => {
   try {
     const res = await apiService.batchUpdateTenantLogLevel(currentTenant.value.id, selectedLogLevel.value);
     logLevelResult.value = res;
+    if (res.success) {
+      currentSavedLogLevel.value = selectedLogLevel.value;
+    }
   } catch (e: any) {
     logLevelResult.value = { success: false, message: e.message || 'Log Level 일괄 적용 중 오류가 발생했습니다.' };
   } finally {
@@ -855,21 +885,33 @@ const getBadgeClass = (tenant: Tenant) => {
                 <div class="rounded-lg border border-primary/20 bg-primary-tint/30 p-3.5 text-[12px] leading-relaxed text-[#3B4257]">
                   <div class="font-semibold text-primary mb-0.5 flex items-center gap-1.5">
                     <Info class="h-4 w-4" />
-                    SAP Integration Suite Log Level 일괄 제어
+                    SAP Integration Suite Log Level 일괄 제어 (PUT /api/tenants/{id}/log-level)
                   </div>
-                  현재 테넌트에 배포된 모든 Integration Flow 아티팩트의 Message Processing Log Level을 한 번에 원하는 수준으로 변경합니다.
+                  지정한 로그 레벨을 DB에 저장하고 해당 테넌트에 배포된(<code>STARTED</code>) 아티팩트 전체에 즉시 반영합니다. 이후 10분마다 백엔드 스케줄러가 저장된 설정을 배포된 아티팩트 전체에 지속적으로 재적용(Drift Correction)합니다.
                 </div>
 
                 <div>
-                  <label class="mb-2 block text-[12.5px] font-bold text-[#3B4257]">적용할 Log Level 선택</label>
-                  <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  <div class="mb-2 flex items-center justify-between">
+                    <label class="text-[12.5px] font-bold text-[#3B4257]">적용할 Log Level 선택</label>
+                    <div v-if="currentSavedLogLevel" class="flex items-center gap-1.5 text-[11.5px] font-semibold text-muted">
+                      <span>현재 DB 설정:</span>
+                      <span class="rounded bg-primary-tint px-2 py-0.5 font-mono text-primary font-bold">
+                        {{ currentSavedLogLevel }}
+                      </span>
+                    </div>
+                    <div v-else-if="!isLoadingLogLevel" class="text-[11px] text-muted">
+                      (저장된 설정 없음 - 기본값)
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
                     <button
                       v-for="lvl in availableLogLevels"
                       :key="lvl.value"
                       type="button"
                       @click="selectedLogLevel = lvl.value"
                       :class="[
-                        'flex flex-col items-start rounded-xl border p-3 text-left transition-all',
+                        'flex flex-col items-start rounded-xl border p-3 text-left transition-all cursor-pointer',
                         selectedLogLevel === lvl.value 
                           ? 'border-primary ring-2 ring-primary/20 bg-surface shadow-sm' 
                           : `${lvl.color} opacity-80 hover:opacity-100`
@@ -879,7 +921,7 @@ const getBadgeClass = (tenant: Tenant) => {
                         <span>{{ lvl.label }}</span>
                         <CheckCircle2 v-if="selectedLogLevel === lvl.value" class="h-4 w-4 text-primary" />
                       </div>
-                      <span class="mt-1 text-[11px] opacity-80">{{ lvl.desc }}</span>
+                      <span class="mt-1 text-[11px] opacity-80 leading-snug">{{ lvl.desc }}</span>
                     </button>
                   </div>
                 </div>

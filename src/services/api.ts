@@ -1,5 +1,5 @@
-import type { CheckRun, Finding, Tenant, IFlow, AppRule, TrackerArtifact, Project, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, TenantEmailConfig, LogLevelType } from '../types';
-export type { AppRule, TrackerArtifact, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, TenantEmailConfig, LogLevelType } from "../types";
+import type { CheckRun, Finding, Tenant, IFlow, AppRule, TrackerArtifact, Project, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, TenantEmailConfig, LogLevel, TenantLogLevelResponse, TenantLogLevelRequest } from '../types';
+export type { AppRule, TrackerArtifact, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, TenantEmailConfig, LogLevel, LogLevelType, TenantLogLevelResponse, TenantLogLevelRequest } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -704,21 +704,36 @@ export const apiService = {
     return { status: 200, data: updatedRule };
   },
 
-  async batchUpdateTenantLogLevel(tenantId: number, logLevel: LogLevelType): Promise<{ success: boolean; message: string }> {
+  async getTenantLogLevel(tenantId: number): Promise<TenantLogLevelResponse | null> {
     try {
-      const res = await fetchApi<any>(`/tenants/${tenantId}/log-level`, {
-        method: 'POST',
-        body: JSON.stringify({ logLevel, applyToAll: true })
+      const res = await fetchApi<TenantLogLevelResponse>(`/tenants/${tenantId}/log-level`);
+      if (res && res.logLevel) {
+        return res;
+      }
+      return null;
+    } catch (e: any) {
+      // 404 Not Found (설정 없음) 또는 기타 에러 시 null 반환
+      return null;
+    }
+  },
+
+  async batchUpdateTenantLogLevel(tenantId: number, logLevel: LogLevel): Promise<{ success: boolean; message: string; data?: TenantLogLevelResponse }> {
+    try {
+      const payload: TenantLogLevelRequest = { logLevel };
+      const res = await fetchApi<TenantLogLevelResponse>(`/tenants/${tenantId}/log-level`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
       });
       return {
         success: true,
-        message: res?.message || `테넌트 (ID: ${tenantId})의 모든 아티팩트 Log Level이 ${logLevel}(으)로 성공적으로 적용되었습니다.`
+        message: `테넌트 (ID: ${tenantId})의 Log Level이 ${res?.logLevel || logLevel}(으)로 성공적으로 저장 및 일괄 적용되었습니다. (배포된 아티팩트 전체 반영 및 10분 주기 자동 동기화 활성화)`,
+        data: res
       };
     } catch (e: any) {
-      // Mock Fallback
+      console.error('Failed to update tenant log level:', e);
       return {
-        success: true,
-        message: `테넌트 (ID: ${tenantId})의 Log Level이 ${logLevel}(으)로 일괄 적용되었습니다. (Frontend Dynamic Mode)`
+        success: false,
+        message: e.message || 'Log Level 일괄 적용 및 저장 중 오류가 발생했습니다.'
       };
     }
   },

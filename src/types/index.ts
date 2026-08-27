@@ -14,7 +14,7 @@ export interface Tenant {
   status?: 'connected' | 'disconnected' | 'error';
   lastChecked?: string;
   packageCount?: number;
-  logLevel?: 'INFO' | 'DEBUG' | 'TRACE' | 'WARN' | 'ERROR' | 'NONE';
+  logLevel?: LogLevel;
   emailConfig?: TenantEmailConfig;
   // 인터페이스(런타임/재처리) 호출 권한용 인증 정보
   interfaceUrl?: string;
@@ -28,12 +28,22 @@ export interface Tenant {
   runtimeTokenUrl?: string;
 }
 
-export type LogLevelType = 'INFO' | 'DEBUG' | 'TRACE' | 'WARN' | 'ERROR' | 'NONE';
+export type LogLevel = 'NONE' | 'INFO' | 'ERROR' | 'DEBUG' | 'TRACE';
+export type LogLevelType = LogLevel;
+
+export interface TenantLogLevelResponse {
+  tenantId: number;
+  logLevel: LogLevel;
+}
+
+export interface TenantLogLevelRequest {
+  logLevel: LogLevel;
+}
 
 export interface TenantLogLevelConfig {
   tenantId: number;
-  logLevel: LogLevelType;
-  applyToAll: boolean;
+  logLevel: LogLevel;
+  applyToAll?: boolean;
   targetPackageId?: number;
 }
 
