@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.gitignore
+.vscode
+.agents
+*.log
+Dockerfile
+.dockerignore
+docs_parsed.txt
+references
+README.md
