@@ -42,6 +42,7 @@ const syncingTenantId = ref<number | null>(null);
 
 // --- Tenant Management State ---
 const isTesting = ref(false);
+const isSavingTenant = ref(false);
 const testResult = ref('');
 const showTenantForm = ref(false);
 const tenantFormMode = ref<'create' | 'edit'>('create');
@@ -269,12 +270,13 @@ const isLoadingLogLevel = ref(false);
 const isApplyingLogLevel = ref(false);
 const logLevelResult = ref<{ success?: boolean; message?: string }>({});
 
+// 로그 레벨 순서: NONE, INFO, ERROR, DEBUG, TRACE
 const availableLogLevels: { value: LogLevel; label: string; desc: string; color: string }[] = [
+  { value: 'NONE', label: 'NONE', desc: '로그 기록 비활성화', color: 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100' },
   { value: 'INFO', label: 'INFO', desc: '표준 모니터링 로그', color: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100' },
+  { value: 'ERROR', label: 'ERROR', desc: '실패 및 오류 로그만', color: 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100' },
   { value: 'DEBUG', label: 'DEBUG', desc: '상세 디버그 분석', color: 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100' },
   { value: 'TRACE', label: 'TRACE', desc: '메시지 페이로드 트레이스', color: 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' },
-  { value: 'ERROR', label: 'ERROR', desc: '실패 및 오류 로그만', color: 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100' },
-  { value: 'NONE', label: 'NONE', desc: '로그 기록 비활성화', color: 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100' },
 ];
 
 // 2. Email Notification & SMTP Config State
@@ -459,7 +461,14 @@ const handleSaveTenant = async () => {
     alert('프로젝트가 선택되지 않았습니다.');
     return;
   }
+
+  if (!currentTenant.value.name?.trim() || !currentTenant.value.odataUrl?.trim() || !currentTenant.value.clientId?.trim() || !currentTenant.value.tokenUrl?.trim()) {
+    alert('테넌트 이름, OData API URL, Client ID, Token URL 등 필수 정보를 모두 입력해 주세요.');
+    return;
+  }
   
+  isSavingTenant.value = true;
+
   const ifUrl = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceUrl : (currentTenant.value.interfaceUrl || '');
   const ifClientId = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientId : currentTenant.value.clientId;
   const ifClientSecret = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientSecret : currentTenant.value.clientSecret;
@@ -467,11 +476,11 @@ const handleSaveTenant = async () => {
 
   const payload = {
     projectId: currentProjectId.value,
-    name: currentTenant.value.name,
-    odataUrl: currentTenant.value.odataUrl,
-    clientId: currentTenant.value.clientId,
+    name: currentTenant.value.name.trim(),
+    odataUrl: currentTenant.value.odataUrl.trim(),
+    clientId: currentTenant.value.clientId.trim(),
     clientSecret: currentTenant.value.clientSecret,
-    tokenUrl: currentTenant.value.tokenUrl,
+    tokenUrl: currentTenant.value.tokenUrl.trim(),
     interfaceUrl: ifUrl,
     interfaceClientId: ifClientId,
     interfaceClientSecret: ifClientSecret,
@@ -502,6 +511,8 @@ const handleSaveTenant = async () => {
   } catch (error: any) {
     console.error('Failed to save tenant', error);
     alert(error.message || '테넌트 저장 중 오류가 발생했습니다.');
+  } finally {
+    isSavingTenant.value = false;
   }
 };
 
@@ -675,7 +686,26 @@ const getBadgeClass = (tenant: Tenant) => {
     </div>
 
     <!-- Tenant Form & Additional Features Container (2-Column Grid) -->
-    <div v-if="showTenantForm" class="mt-6 rounded-2xl border border-line bg-surface p-6 shadow-xl transition-all duration-300">
+    <div v-if="showTenantForm" class="mt-6 rounded-2xl border border-line bg-surface p-6 shadow-xl transition-all duration-300 relative overflow-hidden">
+      <!-- Saving Tenant Loading Overlay (입력 및 클릭 완전 차단) -->
+      <div v-if="isSavingTenant" class="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-2xl bg-surface/90 backdrop-blur-xs p-6 text-center animate-fade">
+        <div class="mb-4 relative flex items-center justify-center">
+          <div class="h-16 w-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
+          <Server class="h-7 w-7 text-primary absolute" />
+        </div>
+        <h4 class="m-0 font-disp text-base font-bold text-ink">
+          {{ tenantFormMode === 'create' ? '신규 테넌트를 등록하고 있습니다' : '테넌트 정보를 업데이트하고 있습니다' }}
+        </h4>
+        <p class="mt-2 max-w-md text-[12.5px] leading-relaxed text-muted">
+          SAP Integration Suite와 통신하여 <strong>Integration Package 및 아티팩트 목록을 동기화</strong>하는 중입니다.<br />
+          서버 작업이 완료될 때까지 잠시만 기다려 주세요...
+        </p>
+        <div class="mt-4 flex items-center gap-2 rounded-full bg-primary-tint px-3.5 py-1.5 text-xs font-semibold text-primary shadow-xs">
+          <RotateCw class="h-3.5 w-3.5 animate-spin" />
+          <span>동기화 진행 중 (입력 및 조작이 일시 제한됩니다)</span>
+        </div>
+      </div>
+
       <div class="mb-5 flex items-center justify-between border-b border-line pb-4">
         <div class="flex items-center gap-2.5">
           <Server class="h-5 w-5 text-primary" />
@@ -686,7 +716,7 @@ const getBadgeClass = (tenant: Tenant) => {
             {{ currentTenant.name || '새 테넌트' }}
           </span>
         </div>
-        <button @click="handleCancelTenant" class="text-xs font-semibold text-muted hover:text-ink transition">
+        <button @click="!isSavingTenant && handleCancelTenant()" :disabled="isSavingTenant" class="text-xs font-semibold text-muted hover:text-ink transition disabled:opacity-40 disabled:cursor-not-allowed">
           닫기 ✕
         </button>
       </div>
@@ -706,7 +736,8 @@ const getBadgeClass = (tenant: Tenant) => {
                   <button 
                     type="button"
                     @click="openJsonModal('management')"
-                    class="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary-tint px-2.5 py-1 text-[11.5px] font-bold text-primary transition hover:bg-primary hover:text-white cursor-pointer shadow-xs"
+                    :disabled="isSavingTenant"
+                    class="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary-tint px-2.5 py-1 text-[11.5px] font-bold text-primary transition hover:bg-primary hover:text-white cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     title="SAP BTP Service Key JSON을 붙여넣어 자동으로 입력합니다"
                   >
                     <Zap class="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
@@ -722,11 +753,11 @@ const getBadgeClass = (tenant: Tenant) => {
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">테넌트 이름</label>
-                    <input type="text" v-model="currentTenant.name" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-sans text-[12.5px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="예: S-Oil PRD" />
+                    <input type="text" v-model="currentTenant.name" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-sans text-[12.5px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 disabled:opacity-60" placeholder="예: S-Oil PRD" />
                   </div>
                   <div>
                     <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">유형</label>
-                    <select v-model="currentTenant.platformType" class="w-full appearance-none rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-sans text-[12.5px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" style="background-image: url('data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236C7385\' stroke-width=\'2.2\'><path d=\'M6 9l6 6 6-6\'/></svg>'); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px;">
+                    <select v-model="currentTenant.platformType" :disabled="isSavingTenant" class="w-full appearance-none rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-sans text-[12.5px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 disabled:opacity-60" style="background-image: url('data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236C7385\' stroke-width=\'2.2\'><path d=\'M6 9l6 6 6-6\'/></svg>'); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px;">
                       <option value="CLOUD_FOUNDRY">Cloud Foundry</option>
                       <option value="NEO">Neo</option>
                     </select>
@@ -735,23 +766,23 @@ const getBadgeClass = (tenant: Tenant) => {
 
                 <div>
                   <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">OData API URL</label>
-                  <input type="text" v-model="currentTenant.odataUrl" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="https://..." />
+                  <input type="text" v-model="currentTenant.odataUrl" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 disabled:opacity-60" placeholder="https://..." />
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
                   <div>
                     <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">Management Client ID</label>
-                    <input type="text" v-model="currentTenant.clientId" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="Client ID" />
+                    <input type="text" v-model="currentTenant.clientId" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 disabled:opacity-60" placeholder="Client ID" />
                   </div>
                   <div>
                     <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">Management Client Secret</label>
-                    <input type="password" v-model="currentTenant.clientSecret" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="••••••••" />
+                    <input type="password" v-model="currentTenant.clientSecret" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 disabled:opacity-60" placeholder="••••••••" />
                   </div>
                 </div>
 
                 <div>
                   <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">Management Token URL</label>
-                  <input type="text" v-model="currentTenant.tokenUrl" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" placeholder="https://..." />
+                  <input type="text" v-model="currentTenant.tokenUrl" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-2 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 disabled:opacity-60" placeholder="https://..." />
                 </div>
               </div>
             </div>
@@ -768,14 +799,15 @@ const getBadgeClass = (tenant: Tenant) => {
                     v-if="useSeparateInterfaceAuth"
                     type="button"
                     @click="openJsonModal('interface')"
-                    class="flex items-center gap-1 rounded-lg border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-2 py-0.5 text-[11px] font-bold text-[#7C3AED] transition hover:bg-[#7C3AED] hover:text-white cursor-pointer shadow-xs"
+                    :disabled="isSavingTenant"
+                    class="flex items-center gap-1 rounded-lg border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-2 py-0.5 text-[11px] font-bold text-[#7C3AED] transition hover:bg-[#7C3AED] hover:text-white cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     title="런타임 전용 Service Key JSON 붙여넣기"
                   >
                     <Zap class="h-3 w-3 text-amber-500 fill-amber-500" />
                     <span>JSON 붙여넣기</span>
                   </button>
                   <label class="relative inline-flex items-center cursor-pointer gap-2 text-[11.5px] font-semibold text-muted">
-                    <input type="checkbox" v-model="useSeparateInterfaceAuth" class="sr-only peer" />
+                    <input type="checkbox" v-model="useSeparateInterfaceAuth" :disabled="isSavingTenant" class="sr-only peer" />
                     <div class="w-8 h-4.5 bg-line-2 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-[#7C3AED]"></div>
                     <span :class="{ 'text-[#7C3AED] font-bold': useSeparateInterfaceAuth }">별도 등록</span>
                   </label>
@@ -788,21 +820,21 @@ const getBadgeClass = (tenant: Tenant) => {
                 </div>
                 <div>
                   <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Runtime URL (인터페이스 호출 주소)</label>
-                  <input type="text" v-model="currentTenant.interfaceUrl" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15" placeholder="예: https://eXXXX-iflmap.hcisbp.eu1.hana.ondemand.com (또는 https://...-rt...)" />
+                  <input type="text" v-model="currentTenant.interfaceUrl" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15 disabled:opacity-60" placeholder="예: https://eXXXX-iflmap.hcisbp.eu1.hana.ondemand.com (또는 https://...-rt...)" />
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
                     <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Client ID</label>
-                    <input type="text" v-model="currentTenant.interfaceClientId" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15" placeholder="예: sb-..." />
+                    <input type="text" v-model="currentTenant.interfaceClientId" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15 disabled:opacity-60" placeholder="예: sb-..." />
                   </div>
                   <div>
                     <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Client Secret</label>
-                    <input type="password" v-model="currentTenant.interfaceClientSecret" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15" placeholder="••••••••" />
+                    <input type="password" v-model="currentTenant.interfaceClientSecret" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15 disabled:opacity-60" placeholder="••••••••" />
                   </div>
                 </div>
                 <div>
                   <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Token URL</label>
-                  <input type="text" v-model="currentTenant.interfaceTokenUrl" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15" placeholder="https://..." />
+                  <input type="text" v-model="currentTenant.interfaceTokenUrl" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15 disabled:opacity-60" placeholder="https://..." />
                 </div>
               </div>
               <div v-else class="rounded-lg bg-surface-2/60 px-3 py-2 text-[11.5px] text-muted flex items-center gap-2">
@@ -822,15 +854,20 @@ const getBadgeClass = (tenant: Tenant) => {
             <div class="flex items-center gap-2">
               <button 
                 @click="handleTestConnection" 
-                :disabled="isTesting"
-                class="flex items-center gap-1.5 rounded-[10px] border border-line-2 bg-surface px-3 py-2 text-[12px] font-semibold text-ink shadow-sm transition hover:border-[#D0D5E1] hover:bg-surface-2 disabled:opacity-50 cursor-pointer"
+                :disabled="isTesting || isSavingTenant"
+                class="flex items-center gap-1.5 rounded-[10px] border border-line-2 bg-surface px-3 py-2 text-[12px] font-semibold text-ink shadow-sm transition hover:border-[#D0D5E1] hover:bg-surface-2 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
               >
                 <TestTube2 class="h-3.5 w-3.5" />
                 연결 테스트
               </button>
               <div class="flex-1"></div>
-              <button @click="handleSaveTenant" class="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2 text-[12.5px] font-semibold text-white shadow-md transition hover:shadow-lg cursor-pointer">
-                테넌트 저장
+              <button 
+                @click="handleSaveTenant" 
+                :disabled="isSavingTenant"
+                class="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2 text-[12.5px] font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <RotateCw v-if="isSavingTenant" class="h-3.5 w-3.5 animate-spin" />
+                <span>{{ isSavingTenant ? '테넌트 등록 중…' : '테넌트 저장' }}</span>
               </button>
             </div>
           </div>
