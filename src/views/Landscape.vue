@@ -17,7 +17,11 @@ import {
   ShieldCheck,
   Server,
   Layers,
-  Sparkles
+  Sparkles,
+  Zap,
+  FileJson,
+  ClipboardPaste,
+  Check
 } from 'lucide-vue-next';
 
 // Shared State & Project Context Injected
@@ -67,6 +71,193 @@ const currentTenant = ref<{
   interfaceClientSecret: '',
   interfaceTokenUrl: ''
 });
+
+// --- Service Key JSON Import State & Methods ---
+const showJsonModal = ref(false);
+const jsonInput = ref('');
+const jsonImportTarget = ref<'management' | 'interface'>('management');
+const autoFillName = ref(true);
+
+interface ParsedServiceKey {
+  clientId: string;
+  clientSecret: string;
+  url: string;
+  tokenUrl: string;
+  suggestedName: string;
+  platformType: 'CLOUD_FOUNDRY' | 'NEO';
+  hasOauthWrapper: boolean;
+}
+
+const parsedJsonResult = computed<{
+  isValid: boolean;
+  data?: ParsedServiceKey;
+  error?: string;
+  fieldCount: number;
+}>(() => {
+  const text = jsonInput.value.trim();
+  if (!text) {
+    return { isValid: false, fieldCount: 0 };
+  }
+
+  try {
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e: any) {
+      return { isValid: false, error: '올바른 JSON 구문(Syntax)이 아닙니다. 따옴표와 괄호를 확인해 주세요.', fieldCount: 0 };
+    }
+
+    if (typeof parsed !== 'object' || parsed === null) {
+      return { isValid: false, error: 'JSON 루트는 객체 형태({ ... })여야 합니다.', fieldCount: 0 };
+    }
+
+    // 탐색할 객체 후보군 순회 (oauth, credentials, credentials.oauth, service_key 등)
+    const candidates = [
+      parsed.oauth,
+      parsed.credentials?.oauth,
+      parsed.credentials,
+      parsed.service_key?.oauth,
+      parsed.service_key,
+      parsed
+    ].filter(c => c && typeof c === 'object');
+
+    const findField = (keys: string[]): string | undefined => {
+      for (const obj of candidates) {
+        const objKeys = Object.keys(obj);
+        for (const k of keys) {
+          const matchKey = objKeys.find(ok => ok.toLowerCase().replace(/[-_]/g, '') === k.toLowerCase().replace(/[-_]/g, ''));
+          if (matchKey && typeof obj[matchKey] === 'string' && obj[matchKey].trim() !== '') {
+            return obj[matchKey].trim();
+          }
+        }
+      }
+      return undefined;
+    };
+
+    const clientId = findField(['clientid', 'clientId', 'client_id', 'client-id']);
+    const clientSecret = findField(['clientsecret', 'clientSecret', 'client_secret', 'client-secret']);
+    const url = findField(['url', 'odataurl', 'odata_url', 'serviceurl', 'service_url', 'apiurl', 'api_url']);
+    const tokenUrl = findField(['tokenurl', 'tokenUrl', 'token_url', 'token-url', 'oauthurl', 'oauth_url']);
+
+    let count = 0;
+    if (clientId) count++;
+    if (clientSecret) count++;
+    if (url) count++;
+    if (tokenUrl) count++;
+
+    if (count === 0) {
+      return {
+        isValid: false,
+        error: 'JSON에서 clientid, clientsecret, url, tokenurl 등의 인증 필드를 찾을 수 없습니다.',
+        fieldCount: 0
+      };
+    }
+
+    // 테넌트 이름 자동 추출 (URL 서브도메인 기반: https://nanoh2o-is-prd.it-cpi015... -> nanoh2o-is-prd)
+    let suggestedName = '';
+    if (url) {
+      try {
+        const parsedUrl = new URL(url.startsWith('http') ? url : `https://${url}`);
+        const hostParts = parsedUrl.hostname.split('.');
+        if (hostParts.length > 0 && hostParts[0]) {
+          suggestedName = hostParts[0];
+        }
+      } catch (_) {
+        // url 파싱 실패 시 패스
+      }
+    }
+
+    return {
+      isValid: true,
+      data: {
+        clientId: clientId || '',
+        clientSecret: clientSecret || '',
+        url: url || '',
+        tokenUrl: tokenUrl || '',
+        suggestedName,
+        platformType: 'CLOUD_FOUNDRY',
+        hasOauthWrapper: !!parsed.oauth
+      },
+      fieldCount: count
+    };
+  } catch (err: any) {
+    return { isValid: false, error: err.message || 'JSON 파싱 중 오류가 발생했습니다.', fieldCount: 0 };
+  }
+});
+
+const openJsonModal = (target: 'management' | 'interface' = 'management') => {
+  jsonImportTarget.value = target;
+  jsonInput.value = '';
+  showJsonModal.value = true;
+};
+
+const handlePasteFromClipboard = async () => {
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        jsonInput.value = text;
+        return;
+      }
+    }
+    alert('클립보드가 비어있거나 권한이 없습니다. 텍스트 입력창에 직접 붙여넣어 주세요 (Ctrl+V).');
+  } catch (err) {
+    alert('브라우저 클립보드 권한이 필요합니다. 텍스트 입력창에 직접 붙여넣어 주세요 (Ctrl+V).');
+  }
+};
+
+const handleLoadSampleJson = () => {
+  jsonInput.value = JSON.stringify({
+    oauth: {
+      clientid: "sb-52860ccc-c521-49b8-a3c4-a0841fd6c2e9!b37484|it!b33",
+      clientsecret: "224ea09c-da71-4fbd-b447-2daf49e73600$xQ71x3XAuuSDVx53e_BMvO7o_CxgvxuLVG0kRAA-01E=",
+      url: "https://nanoh2o-is-prd.it-cpi015.cfapps.ap12.hana.ondemand.com",
+      createdate: "2026-06-24T05:20:56.813Z",
+      tokenurl: "https://nanoh2o-is-prd.authentication.ap12.hana.ondemand.com/oauth/token"
+    }
+  }, null, 2);
+};
+
+const handleClearJson = () => {
+  jsonInput.value = '';
+};
+
+const applyJsonData = (autoTest: boolean = false) => {
+  if (!parsedJsonResult.value.isValid || !parsedJsonResult.value.data) {
+    alert('유효한 Service Key JSON 데이터가 아닙니다.');
+    return;
+  }
+
+  const data = parsedJsonResult.value.data;
+
+  if (jsonImportTarget.value === 'management') {
+    if (data.url) currentTenant.value.odataUrl = data.url;
+    if (data.clientId) currentTenant.value.clientId = data.clientId;
+    if (data.clientSecret) currentTenant.value.clientSecret = data.clientSecret;
+    if (data.tokenUrl) currentTenant.value.tokenUrl = data.tokenUrl;
+    if (data.platformType) currentTenant.value.platformType = data.platformType;
+    
+    // 테넌트 이름 자동 적용
+    if (autoFillName.value && data.suggestedName && (!currentTenant.value.name || tenantFormMode.value === 'create')) {
+      currentTenant.value.name = data.suggestedName;
+    }
+  } else {
+    // Interface (Runtime) 인증 정보 적용
+    useSeparateInterfaceAuth.value = true;
+    if (data.url) currentTenant.value.interfaceUrl = data.url;
+    if (data.clientId) currentTenant.value.interfaceClientId = data.clientId;
+    if (data.clientSecret) currentTenant.value.interfaceClientSecret = data.clientSecret;
+    if (data.tokenUrl) currentTenant.value.interfaceTokenUrl = data.tokenUrl;
+  }
+
+  showJsonModal.value = false;
+
+  if (autoTest) {
+    setTimeout(() => {
+      handleTestConnection();
+    }, 150);
+  }
+};
 
 // --- Additional Tenant Features State (Log Level & Email Notification) ---
 const activeTab = ref<'logLevel' | 'email'>('logLevel');
@@ -481,9 +672,20 @@ const getBadgeClass = (tenant: Tenant) => {
                   <Layers class="h-4 w-4 text-primary" />
                   <span>API 관리 인증 설정 (Management / OData)</span>
                 </div>
-                <span class="rounded-full bg-primary-tint px-2 py-0.5 font-mono text-[10.5px] font-semibold text-primary">
-                  메타데이터/로그 조회용
-                </span>
+                <div class="flex items-center gap-2">
+                  <button 
+                    type="button"
+                    @click="openJsonModal('management')"
+                    class="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary-tint px-2.5 py-1 text-[11.5px] font-bold text-primary transition hover:bg-primary hover:text-white cursor-pointer shadow-xs"
+                    title="SAP BTP Service Key JSON을 붙여넣어 자동으로 입력합니다"
+                  >
+                    <Zap class="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                    <span>JSON 자동 완성</span>
+                  </button>
+                  <span class="rounded-full bg-surface-2 border border-line px-2 py-0.5 font-mono text-[10.5px] font-semibold text-muted">
+                    메타데이터/로그 조회용
+                  </span>
+                </div>
               </div>
 
               <div class="grid grid-cols-1 gap-3">
@@ -531,11 +733,23 @@ const getBadgeClass = (tenant: Tenant) => {
                   <ShieldCheck class="h-4 w-4 text-[#7C3AED]" />
                   <span>인터페이스 호출 권한 인증 정보 (Runtime)</span>
                 </div>
-                <label class="relative inline-flex items-center cursor-pointer gap-2 text-[11.5px] font-semibold text-muted">
-                  <input type="checkbox" v-model="useSeparateInterfaceAuth" class="sr-only peer" />
-                  <div class="w-8 h-4.5 bg-line-2 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-[#7C3AED]"></div>
-                  <span :class="{ 'text-[#7C3AED] font-bold': useSeparateInterfaceAuth }">별도 등록</span>
-                </label>
+                <div class="flex items-center gap-3">
+                  <button 
+                    v-if="useSeparateInterfaceAuth"
+                    type="button"
+                    @click="openJsonModal('interface')"
+                    class="flex items-center gap-1 rounded-lg border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-2 py-0.5 text-[11px] font-bold text-[#7C3AED] transition hover:bg-[#7C3AED] hover:text-white cursor-pointer shadow-xs"
+                    title="런타임 전용 Service Key JSON 붙여넣기"
+                  >
+                    <Zap class="h-3 w-3 text-amber-500 fill-amber-500" />
+                    <span>JSON 붙여넣기</span>
+                  </button>
+                  <label class="relative inline-flex items-center cursor-pointer gap-2 text-[11.5px] font-semibold text-muted">
+                    <input type="checkbox" v-model="useSeparateInterfaceAuth" class="sr-only peer" />
+                    <div class="w-8 h-4.5 bg-line-2 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-[#7C3AED]"></div>
+                    <span :class="{ 'text-[#7C3AED] font-bold': useSeparateInterfaceAuth }">별도 등록</span>
+                  </label>
+                </div>
               </div>
 
               <div v-if="useSeparateInterfaceAuth" class="grid grid-cols-1 gap-3 pt-1 border-t border-line/60">
@@ -798,6 +1012,199 @@ const getBadgeClass = (tenant: Tenant) => {
               </template>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- Service Key JSON Import & Auto-Fill Modal                                   -->
+    <!-- ========================================================================= -->
+    <div v-if="showJsonModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade">
+      <div class="w-full max-w-2xl rounded-2xl border border-line bg-surface p-6 shadow-2xl transition-all">
+        <!-- Modal Header -->
+        <div class="mb-4 flex items-center justify-between border-b border-line pb-4">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+              <Zap class="h-5 w-5 fill-amber-500 text-amber-500" />
+            </div>
+            <div>
+              <h3 class="m-0 font-disp text-base font-bold text-ink flex items-center gap-2">
+                <span>SAP BTP Service Key JSON 가져오기</span>
+                <span class="rounded-full bg-primary-tint px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                  {{ jsonImportTarget === 'management' ? 'Management (OData)' : 'Interface (Runtime)' }}
+                </span>
+              </h3>
+              <p class="mt-0.5 text-[12px] text-muted">
+                BTP Service Key JSON을 붙여넣으면 클라이언트 ID, Secret, URL 등을 즉시 파싱하여 입력합니다.
+              </p>
+            </div>
+          </div>
+          <button @click="showJsonModal = false" class="rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-ink transition cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        <!-- Target Selector & Quick Action Bar -->
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <!-- Target Radio Tabs -->
+          <div class="flex rounded-lg border border-line-2 bg-surface-2 p-0.5 text-xs font-semibold">
+            <button 
+              type="button"
+              @click="jsonImportTarget = 'management'"
+              :class="[
+                'rounded-md px-3 py-1.5 transition cursor-pointer',
+                jsonImportTarget === 'management' ? 'bg-surface text-primary shadow-xs font-bold' : 'text-muted hover:text-ink'
+              ]"
+            >
+              Management API (OData)
+            </button>
+            <button 
+              type="button"
+              @click="jsonImportTarget = 'interface'"
+              :class="[
+                'rounded-md px-3 py-1.5 transition cursor-pointer',
+                jsonImportTarget === 'interface' ? 'bg-surface text-[#7C3AED] shadow-xs font-bold' : 'text-muted hover:text-ink'
+              ]"
+            >
+              Interface 호출 전용 (Runtime)
+            </button>
+          </div>
+
+          <!-- Quick Action Buttons -->
+          <div class="flex items-center gap-1.5">
+            <button 
+              type="button"
+              @click="handlePasteFromClipboard"
+              class="flex items-center gap-1 rounded-lg border border-line-2 bg-surface px-2.5 py-1 text-[11.5px] font-semibold text-ink shadow-xs hover:bg-surface-2 transition cursor-pointer"
+            >
+              <ClipboardPaste class="h-3.5 w-3.5 text-primary" />
+              <span>클립보드 붙여넣기</span>
+            </button>
+            <button 
+              type="button"
+              @click="handleLoadSampleJson"
+              class="flex items-center gap-1 rounded-lg border border-line-2 bg-surface px-2.5 py-1 text-[11.5px] font-semibold text-muted hover:text-ink hover:bg-surface-2 transition cursor-pointer"
+            >
+              <FileJson class="h-3.5 w-3.5" />
+              <span>예시 JSON</span>
+            </button>
+            <button 
+              v-if="jsonInput"
+              type="button"
+              @click="handleClearJson"
+              class="rounded-lg px-2 py-1 text-[11.5px] font-semibold text-fail hover:bg-fail-bg transition cursor-pointer"
+            >
+              지우기
+            </button>
+          </div>
+        </div>
+
+        <!-- JSON Textarea Input -->
+        <div class="relative mb-3">
+          <textarea
+            v-model="jsonInput"
+            rows="7"
+            class="w-full rounded-xl border border-line-2 bg-surface px-3.5 py-3 font-mono text-[12px] leading-relaxed text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
+            placeholder='{
+  "oauth": {
+    "clientid": "sb-...",
+    "clientsecret": "...",
+    "url": "https://<tenant>.it-cpi015.cfapps....",
+    "tokenurl": "https://<tenant>.authentication..../oauth/token"
+  }
+}'
+          ></textarea>
+        </div>
+
+        <!-- Real-time Live Parsing Status / Preview -->
+        <div class="mb-4">
+          <!-- Parsing Success Card -->
+          <div v-if="parsedJsonResult.isValid && parsedJsonResult.data" class="rounded-xl border border-pass-line bg-pass-bg/60 p-3.5 text-[12px] space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5 font-bold text-pass">
+                <CheckCircle2 class="h-4 w-4 shrink-0" />
+                <span>Service Key 파싱 성공 ({{ parsedJsonResult.fieldCount }}개 인증 필드 감지)</span>
+              </div>
+              <span v-if="parsedJsonResult.data.hasOauthWrapper" class="rounded bg-pass/10 px-2 py-0.5 font-mono text-[10.5px] font-semibold text-pass">
+                oauth 객체 감지
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-[11px] text-ink">
+              <div class="truncate bg-surface/80 rounded-lg p-2 border border-pass-line/50">
+                <span class="font-bold text-muted block mb-0.5">Target URL:</span>
+                <span class="text-ink font-semibold">{{ parsedJsonResult.data.url || '(미포함)' }}</span>
+              </div>
+              <div class="truncate bg-surface/80 rounded-lg p-2 border border-pass-line/50">
+                <span class="font-bold text-muted block mb-0.5">Client ID:</span>
+                <span class="text-ink font-semibold">{{ parsedJsonResult.data.clientId || '(미포함)' }}</span>
+              </div>
+              <div class="truncate bg-surface/80 rounded-lg p-2 border border-pass-line/50">
+                <span class="font-bold text-muted block mb-0.5">Token URL:</span>
+                <span class="text-ink font-semibold">{{ parsedJsonResult.data.tokenUrl || '(미포함)' }}</span>
+              </div>
+              <div class="truncate bg-surface/80 rounded-lg p-2 border border-pass-line/50">
+                <span class="font-bold text-muted block mb-0.5">Client Secret:</span>
+                <span class="text-pass font-semibold">{{ parsedJsonResult.data.clientSecret ? '•••••••• (포함됨)' : '(미포함)' }}</span>
+              </div>
+            </div>
+
+            <!-- Auto-Fill Tenant Name Option (For Management Target) -->
+            <div v-if="jsonImportTarget === 'management' && parsedJsonResult.data.suggestedName" class="flex items-center justify-between pt-1 border-t border-pass-line/40">
+              <label class="flex items-center gap-2 cursor-pointer text-[11.5px] font-semibold text-ink">
+                <input type="checkbox" v-model="autoFillName" class="rounded text-primary focus:ring-primary h-4 w-4" />
+                <span>추출된 테넌트 이름 자동 반영:</span>
+                <span class="rounded bg-white px-2 py-0.5 font-mono text-primary font-bold border border-primary/20">
+                  {{ parsedJsonResult.data.suggestedName }}
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Parsing Error Card -->
+          <div v-else-if="parsedJsonResult.error" class="flex items-start gap-2 rounded-xl border border-fail/30 bg-fail-bg/70 p-3 text-[12px] text-fail">
+            <AlertCircle class="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <div class="font-bold">JSON 파싱 오류</div>
+              <div class="text-[11.5px] opacity-90">{{ parsedJsonResult.error }}</div>
+            </div>
+          </div>
+
+          <!-- Empty Guide Card -->
+          <div v-else class="rounded-xl border border-line-2 bg-surface-2/60 p-3 text-[11.5px] text-muted flex items-center gap-2">
+            <Info class="h-4 w-4 text-primary shrink-0" />
+            <span>BTP Cockpit에서 생성된 Service Key JSON 전체를 붙여넣으면 위 폼의 인증 필드에 자동 매핑됩니다.</span>
+          </div>
+        </div>
+
+        <!-- Modal Footer Actions -->
+        <div class="flex items-center justify-end gap-2 border-t border-line pt-4">
+          <button 
+            type="button"
+            @click="showJsonModal = false"
+            class="rounded-[10px] border border-line-2 bg-surface px-4 py-2 text-[12.5px] font-semibold text-muted hover:bg-surface-2 hover:text-ink transition cursor-pointer"
+          >
+            취소
+          </button>
+          <button 
+            type="button"
+            @click="applyJsonData(false)"
+            :disabled="!parsedJsonResult.isValid"
+            class="flex items-center gap-1.5 rounded-[10px] bg-primary px-4 py-2 text-[12.5px] font-semibold text-white shadow-md transition hover:bg-primary-600 disabled:opacity-50 cursor-pointer"
+          >
+            <Check class="h-4 w-4" />
+            폼에 값 채워넣기
+          </button>
+          <button 
+            v-if="jsonImportTarget === 'management'"
+            type="button"
+            @click="applyJsonData(true)"
+            :disabled="!parsedJsonResult.isValid"
+            class="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2 text-[12.5px] font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-50 cursor-pointer"
+          >
+            <Zap class="h-4 w-4 fill-white" />
+            폼에 채우고 바로 연결 테스트
+          </button>
         </div>
       </div>
     </div>
