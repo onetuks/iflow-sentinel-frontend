@@ -2,6 +2,7 @@
 import { ref, onMounted, provide } from 'vue';
 import Sidebar from './components/Sidebar.vue';
 import Topbar from './components/Topbar.vue';
+import GlobalTaskHub from './components/GlobalTaskHub.vue';
 import { apiService } from './services/api';
 
 const currentProject = ref('');
@@ -53,5 +54,8 @@ const handleProjectChange = (projectName: string) => {
         <router-view @refresh-projects="fetchProjects" />
       </main>
     </div>
+
+    <!-- 전역 백그라운드 태스크 허브 -->
+    <GlobalTaskHub />
   </div>
 </template>

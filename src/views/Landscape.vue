@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, inject, computed, watch } from 'vue';
 import { apiService } from '../services/api';
+import { useTaskHub } from '../composables/useTaskHub';
 import type { Tenant, TenantEmailConfig, LogLevel } from '../types';
 import { 
   Plus, 
@@ -264,10 +265,10 @@ const applyJsonData = (autoTest: boolean = false) => {
 const activeTab = ref<'logLevel' | 'email'>('logLevel');
 
 // 1. Log Level Batch State (API.md: NONE, INFO, ERROR, DEBUG, TRACE)
+const taskHub = useTaskHub();
 const selectedLogLevel = ref<LogLevel>('INFO');
 const currentSavedLogLevel = ref<LogLevel | null>(null);
 const isLoadingLogLevel = ref(false);
-const isApplyingLogLevel = ref(false);
 const logLevelResult = ref<{ success?: boolean; message?: string }>({});
 
 // 로그 레벨 순서: NONE, INFO, ERROR, DEBUG, TRACE
@@ -559,20 +560,24 @@ const handleCancelTenant = () => {
 
 // --- Log Level Batch & Email Config Action Handlers ---
 const handleApplyLogLevelBatch = async () => {
-  if (!currentTenant.value.id) return;
-  isApplyingLogLevel.value = true;
-  logLevelResult.value = {};
-  try {
-    const res = await apiService.batchUpdateTenantLogLevel(currentTenant.value.id, selectedLogLevel.value);
-    logLevelResult.value = res;
-    if (res.success) {
-      currentSavedLogLevel.value = selectedLogLevel.value;
+  const tenantId = currentTenant.value.id;
+  const tenantName = currentTenant.value.name || `Tenant #${tenantId}`;
+  const level = selectedLogLevel.value;
+  if (!tenantId) return;
+
+  logLevelResult.value = {
+    message: `[${tenantName}] 로그 레벨을 ${level}(으)로 변경하는 작업이 백그라운드에 등록되었습니다. 완료될 때까지 다른 테넌트 작업을 계속 진행하실 수 있습니다.`
+  };
+
+  taskHub.startLogLevelTask(tenantId, tenantName, level, (res) => {
+    // 만약 현재 열려있는 테넌트가 해당 테넌트라면 결과 및 DB 설정값 자동 갱신
+    if (currentTenant.value.id === tenantId) {
+      logLevelResult.value = res;
+      if (res.success && res.logLevel) {
+        currentSavedLogLevel.value = res.logLevel;
+      }
     }
-  } catch (e: any) {
-    logLevelResult.value = { success: false, message: e.message || 'Log Level 일괄 적용 중 오류가 발생했습니다.' };
-  } finally {
-    isApplyingLogLevel.value = false;
-  }
+  });
 };
 
 const handleSaveEmailConfig = async () => {
@@ -650,9 +655,20 @@ const getBadgeClass = (tenant: Tenant) => {
       <div 
         v-for="tenant in tenants" 
         :key="tenant.id" 
-        class="group rounded-2xl border border-line bg-surface p-4.5 shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer" 
+        class="group rounded-2xl border border-line bg-surface p-4.5 shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer relative overflow-hidden" 
         @click="handleEditTenantClick(tenant)"
       >
+        <!-- Background Task Running Top Indicator -->
+        <div v-if="taskHub.isTenantBusy(tenant.id)" class="mb-2.5 flex items-center justify-between rounded-lg border border-primary/30 bg-primary-tint/60 px-2.5 py-1 text-[11px] font-bold text-primary animate-pulse">
+          <div class="flex items-center gap-1.5">
+            <RotateCw class="h-3 w-3 animate-spin" />
+            <span>{{ taskHub.getTenantRunningTask(tenant.id)?.targetLevel }} 적용 중</span>
+          </div>
+          <span class="font-mono text-[10px] font-semibold opacity-90">
+            {{ taskHub.getTenantRunningTask(tenant.id)?.elapsedSeconds }}초 경과
+          </span>
+        </div>
+
         <div class="mb-3.5 flex items-center justify-between gap-2">
           <div class="flex items-center gap-2">
             <span :class="['rounded-md px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide', getBadgeClass(tenant)]">
@@ -927,6 +943,20 @@ const getBadgeClass = (tenant: Tenant) => {
                   지정한 로그 레벨을 DB에 저장하고 해당 테넌트에 배포된(<code>STARTED</code>) 아티팩트 전체에 즉시 반영합니다. 이후 10분마다 백엔드 스케줄러가 저장된 설정을 배포된 아티팩트 전체에 지속적으로 재적용(Drift Correction)합니다.
                 </div>
 
+                <!-- Active Running Task Banner in Tab -->
+                <div v-if="currentTenant.id && taskHub.isTenantBusy(currentTenant.id)" class="flex items-center justify-between rounded-xl border border-primary/30 bg-primary-tint/60 p-3 text-[12px] text-primary shadow-xs">
+                  <div class="flex items-center gap-2">
+                    <RotateCw class="h-4 w-4 animate-spin shrink-0" />
+                    <div>
+                      <span class="font-bold">백그라운드에서 로그 레벨을 변경 중입니다.</span>
+                      <div class="text-[11px] opacity-80">창을 닫거나 다른 테넌트로 이동하셔도 안전하게 완료됩니다.</div>
+                    </div>
+                  </div>
+                  <span class="rounded-md bg-surface border border-line-2 px-2 py-0.5 font-mono text-[11px] font-bold text-ink shadow-xs">
+                    {{ taskHub.getTenantRunningTask(currentTenant.id)?.elapsedSeconds }}초 경과
+                  </span>
+                </div>
+
                 <div>
                   <div class="mb-2 flex items-center justify-between">
                     <label class="text-[12.5px] font-bold text-[#3B4257]">적용할 Log Level 선택</label>
@@ -966,10 +996,15 @@ const getBadgeClass = (tenant: Tenant) => {
                 <!-- Log Level Batch Result Message -->
                 <div v-if="logLevelResult.message" :class="[
                   'flex items-center gap-2 rounded-lg border p-3 text-[12px] font-medium',
-                  logLevelResult.success ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail/30 bg-fail-bg text-fail'
+                  logLevelResult.success === true 
+                    ? 'border-pass-line bg-pass-bg text-pass' 
+                    : logLevelResult.success === false 
+                      ? 'border-fail/30 bg-fail-bg text-fail' 
+                      : 'border-primary/30 bg-primary-tint text-primary'
                 ]">
-                  <CheckCircle2 v-if="logLevelResult.success" class="h-4 w-4 shrink-0" />
-                  <AlertCircle v-else class="h-4 w-4 shrink-0" />
+                  <CheckCircle2 v-if="logLevelResult.success === true" class="h-4 w-4 shrink-0" />
+                  <AlertCircle v-else-if="logLevelResult.success === false" class="h-4 w-4 shrink-0" />
+                  <Info v-else class="h-4 w-4 shrink-0" />
                   <span>{{ logLevelResult.message }}</span>
                 </div>
               </div>
@@ -999,11 +1034,11 @@ const getBadgeClass = (tenant: Tenant) => {
                   </div>
                   <div class="sm:col-span-2">
                     <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">포트</label>
-                    <input type="number" v-model="emailConfig.smtpPort" class="w-full rounded-[9px] border border-line-2 bg-surface px-2 py-1.5 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none" placeholder="587" />
+                    <input type="number" v-model="emailConfig.smtpPort" class="w-full rounded-[9px] border border-line-2 bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none" placeholder="587" />
                   </div>
                   <div class="sm:col-span-3">
                     <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">보안 프로토콜</label>
-                    <select v-model="emailConfig.security" class="w-full rounded-[9px] border border-line-2 bg-surface px-2 py-1.5 font-sans text-[12px] text-ink transition focus:border-primary focus:outline-none">
+                    <select v-model="emailConfig.security" class="w-full rounded-[9px] border border-line-2 bg-surface px-2.5 py-1.5 font-sans text-[12px] text-ink transition focus:border-primary focus:outline-none">
                       <option value="STARTTLS">STARTTLS</option>
                       <option value="SSL_TLS">SSL/TLS</option>
                       <option value="NONE">None</option>
@@ -1063,11 +1098,11 @@ const getBadgeClass = (tenant: Tenant) => {
               <template v-if="activeTab === 'logLevel'">
                 <button 
                   @click="handleApplyLogLevelBatch" 
-                  :disabled="isApplyingLogLevel"
-                  class="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2 text-[12.5px] font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-50"
+                  :disabled="!currentTenant.id || taskHub.isTenantBusy(currentTenant.id)"
+                  class="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2 text-[12.5px] font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 >
-                  <RotateCw :class="['h-3.5 w-3.5', isApplyingLogLevel ? 'animate-spin' : '']" />
-                  Log Level 일괄 적용
+                  <RotateCw :class="['h-3.5 w-3.5', (currentTenant.id && taskHub.isTenantBusy(currentTenant.id)) ? 'animate-spin' : '']" />
+                  <span>{{ (currentTenant.id && taskHub.isTenantBusy(currentTenant.id)) ? '적용 진행 중…' : 'Log Level 일괄 적용' }}</span>
                 </button>
               </template>
 
@@ -1075,7 +1110,7 @@ const getBadgeClass = (tenant: Tenant) => {
                 <button 
                   @click="handleTestEmailConfig" 
                   :disabled="isTestingEmail"
-                  class="flex items-center gap-1.5 rounded-[10px] border border-line-2 bg-surface px-3 py-2 text-[12px] font-semibold text-ink shadow-sm transition hover:border-[#D0D5E1] hover:bg-surface-2 disabled:opacity-50"
+                  class="flex items-center gap-1.5 rounded-[10px] border border-line-2 bg-surface px-3 py-2 text-[12px] font-semibold text-ink shadow-sm transition hover:border-[#D0D5E1] hover:bg-surface-2 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 >
                   <Send :class="['h-3.5 w-3.5', isTestingEmail ? 'animate-pulse' : '']" />
                   테스트 메일 발송
@@ -1083,7 +1118,7 @@ const getBadgeClass = (tenant: Tenant) => {
                 <button 
                   @click="handleSaveEmailConfig" 
                   :disabled="isSavingEmail"
-                  class="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2 text-[12.5px] font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-50"
+                  class="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2 text-[12.5px] font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 >
                   <Mail class="h-3.5 w-3.5" />
                   메일 설정 저장
