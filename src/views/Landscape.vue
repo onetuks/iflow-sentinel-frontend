@@ -2,7 +2,7 @@
 import { ref, onMounted, inject, computed, watch } from 'vue';
 import { apiService } from '../services/api';
 import { useTaskHub } from '../composables/useTaskHub';
-import type { Tenant, TenantEmailConfig, LogLevel } from '../types';
+import type { Tenant, LogLevel } from '../types';
 import { 
   Plus, 
   Info, 
@@ -22,7 +22,8 @@ import {
   Zap,
   FileJson,
   ClipboardPaste,
-  Check
+  Check,
+  Clock
 } from 'lucide-vue-next';
 
 // Shared State & Project Context Injected
@@ -280,21 +281,67 @@ const availableLogLevels: { value: LogLevel; label: string; desc: string; color:
   { value: 'TRACE', label: 'TRACE', desc: '메시지 페이로드 트레이스', color: 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' },
 ];
 
-// 2. Email Notification & SMTP Config State
-const emailConfig = ref<TenantEmailConfig>({
-  enabled: false,
-  smtpHost: '',
-  smtpPort: 587,
-  security: 'STARTTLS',
-  username: '',
-  password: '',
-  senderEmail: '',
-  recipientEmails: ''
-});
-const isTestingEmail = ref(false);
-const isSavingEmail = ref(false);
-const emailTestResult = ref<{ success?: boolean; message?: string }>({});
-const emailSaveResult = ref<{ success?: boolean; message?: string }>({});
+// 2. Failure Notification & Recipients State
+const notificationEnabled = ref(true);
+const recipientList = ref<string[]>([]);
+const newRecipientInput = ref('');
+const recipientInputError = ref('');
+const intervalMinutes = ref<number>(10);
+const lastNotifiedAt = ref<string | null>(null);
+const isTestingNotification = ref(false);
+const isSavingNotification = ref(false);
+const notificationTestResult = ref<{ success?: boolean; message?: string }>({});
+const notificationSaveResult = ref<{ success?: boolean; message?: string }>({});
+const testTargetEmail = ref('');
+
+const handleAddRecipient = () => {
+  const email = newRecipientInput.value.trim();
+  recipientInputError.value = '';
+  if (!email) {
+    recipientInputError.value = '이메일 주소를 입력해 주세요.';
+    return;
+  }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    recipientInputError.value = '올바른 이메일 형식(예: user@company.com)을 입력해 주세요.';
+    return;
+  }
+  if (recipientList.value.includes(email)) {
+    recipientInputError.value = '이미 등록된 이메일 주소입니다.';
+    return;
+  }
+  recipientList.value.push(email);
+  newRecipientInput.value = '';
+};
+
+const handleRemoveRecipient = (index: number) => {
+  recipientList.value.splice(index, 1);
+};
+
+const loadTenantNotificationConfig = async (tenantId: number) => {
+  try {
+    const config = await apiService.getTenantNotificationConfig(tenantId);
+    if (config) {
+      notificationEnabled.value = config.isEnabled ?? true;
+      recipientList.value = config.recipients
+        ? config.recipients.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : [];
+      intervalMinutes.value = config.intervalMinutes ?? 10;
+      lastNotifiedAt.value = config.lastNotifiedAt || null;
+    } else {
+      notificationEnabled.value = true;
+      recipientList.value = [];
+      intervalMinutes.value = 10;
+      lastNotifiedAt.value = null;
+    }
+  } catch (err) {
+    console.error('Failed to load notification config:', err);
+    notificationEnabled.value = true;
+    recipientList.value = [];
+    intervalMinutes.value = 10;
+    lastNotifiedAt.value = null;
+  }
+};
 
 const loadTenants = async () => {
   isLoading.value = true;
@@ -304,17 +351,6 @@ const loadTenants = async () => {
     console.error('Failed to fetch tenants:', err);
   } finally {
     isLoading.value = false;
-  }
-};
-
-const loadTenantEmailConfig = async (tenantId: number) => {
-  try {
-    const config = await apiService.getTenantEmailConfig(tenantId);
-    if (config) {
-      emailConfig.value = { ...config };
-    }
-  } catch (err) {
-    console.error('Failed to load email config:', err);
   }
 };
 
@@ -410,10 +446,16 @@ const handleAddTenantClick = () => {
   testResult.value = '';
   activeTab.value = 'logLevel';
   logLevelResult.value = {};
-  emailTestResult.value = {};
-  emailSaveResult.value = {};
+  notificationTestResult.value = {};
+  notificationSaveResult.value = {};
   currentSavedLogLevel.value = null;
   selectedLogLevel.value = 'INFO';
+  notificationEnabled.value = true;
+  recipientList.value = [];
+  newRecipientInput.value = '';
+  recipientInputError.value = '';
+  testTargetEmail.value = '';
+  lastNotifiedAt.value = null;
 };
 
 const handleEditTenantClick = async (tenant: Tenant) => {
@@ -444,14 +486,17 @@ const handleEditTenantClick = async (tenant: Tenant) => {
   testResult.value = '';
   activeTab.value = 'logLevel';
   logLevelResult.value = {};
-  emailTestResult.value = {};
-  emailSaveResult.value = {};
+  notificationTestResult.value = {};
+  notificationSaveResult.value = {};
   currentSavedLogLevel.value = null;
   selectedLogLevel.value = 'INFO';
+  newRecipientInput.value = '';
+  recipientInputError.value = '';
+  testTargetEmail.value = '';
 
   if (tenant.id) {
     await Promise.all([
-      loadTenantEmailConfig(tenant.id),
+      loadTenantNotificationConfig(tenant.id),
       loadTenantLogLevel(tenant.id)
     ]);
   }
@@ -580,31 +625,41 @@ const handleApplyLogLevelBatch = async () => {
   });
 };
 
-const handleSaveEmailConfig = async () => {
+const handleSaveNotificationConfig = async () => {
   if (!currentTenant.value.id) return;
-  isSavingEmail.value = true;
-  emailSaveResult.value = {};
+  isSavingNotification.value = true;
+  notificationSaveResult.value = {};
   try {
-    const res = await apiService.saveTenantEmailConfig(currentTenant.value.id, emailConfig.value);
-    emailSaveResult.value = res;
+    const payload = {
+      isEnabled: notificationEnabled.value,
+      recipients: recipientList.value.join(', '),
+      intervalMinutes: Math.max(1, Number(intervalMinutes.value) || 10)
+    };
+    const res = await apiService.saveTenantNotificationConfig(currentTenant.value.id, payload);
+    notificationSaveResult.value = res;
   } catch (e: any) {
-    emailSaveResult.value = { success: false, message: e.message || '메일 설정 저장 실패' };
+    notificationSaveResult.value = { success: false, message: e.message || '알림 수신자 및 탐색 주기 설정 저장 실패' };
   } finally {
-    isSavingEmail.value = false;
+    isSavingNotification.value = false;
   }
 };
 
-const handleTestEmailConfig = async () => {
+const handleTestNotification = async () => {
   if (!currentTenant.value.id) return;
-  isTestingEmail.value = true;
-  emailTestResult.value = {};
+  const target = testTargetEmail.value.trim() || recipientList.value[0] || '';
+  if (!target) {
+    alert('테스트 메일을 발송할 대상 이메일 주소를 입력하거나 수신자를 먼저 추가해 주세요.');
+    return;
+  }
+  isTestingNotification.value = true;
+  notificationTestResult.value = {};
   try {
-    const res = await apiService.testTenantEmailConfig(currentTenant.value.id, emailConfig.value);
-    emailTestResult.value = res;
+    const res = await apiService.sendTestNotificationEmail(currentTenant.value.id, target);
+    notificationTestResult.value = res;
   } catch (e: any) {
-    emailTestResult.value = { success: false, message: e.message || '테스트 메일 발송 실패' };
+    notificationTestResult.value = { success: false, message: e.message || '테스트 메일 발송 실패' };
   } finally {
-    isTestingEmail.value = false;
+    isTestingNotification.value = false;
   }
 };
 
@@ -898,7 +953,7 @@ const getBadgeClass = (tenant: Tenant) => {
             </div>
             <h4 class="m-0 font-disp text-base font-bold text-ink">추가 관리 기능 준비 완료</h4>
             <p class="mt-2 max-w-sm text-[12.5px] leading-relaxed text-muted">
-              테넌트 기본 접속 정보를 먼저 저장해 주세요. 저장이 완료되면 우측 영역에서 <strong>Log Level 일괄 적용</strong> 및 <strong>실패 메시지 메일 알림 설정</strong>을 바로 사용할 수 있습니다.
+              테넌트 기본 접속 정보를 먼저 저장해 주세요. 저장이 완료되면 우측 영역에서 <strong>Log Level 일괄 적용</strong> 및 <strong>실패 메시지 메일 알림/탐색 주기 설정</strong>을 바로 사용할 수 있습니다.
             </p>
           </div>
 
@@ -910,7 +965,7 @@ const getBadgeClass = (tenant: Tenant) => {
                 <button 
                   @click="activeTab = 'logLevel'" 
                   :class="[
-                    'flex items-center gap-2 rounded-lg px-3.5 py-2 text-[12.5px] font-bold transition-all',
+                    'flex items-center gap-2 rounded-lg px-3.5 py-2 text-[12.5px] font-bold transition-all cursor-pointer',
                     activeTab === 'logLevel' 
                       ? 'bg-primary text-white shadow-md' 
                       : 'bg-surface text-muted hover:bg-surface-2 hover:text-ink border border-line-2'
@@ -922,14 +977,14 @@ const getBadgeClass = (tenant: Tenant) => {
                 <button 
                   @click="activeTab = 'email'" 
                   :class="[
-                    'flex items-center gap-2 rounded-lg px-3.5 py-2 text-[12.5px] font-bold transition-all',
+                    'flex items-center gap-2 rounded-lg px-3.5 py-2 text-[12.5px] font-bold transition-all cursor-pointer',
                     activeTab === 'email' 
                       ? 'bg-primary text-white shadow-md' 
                       : 'bg-surface text-muted hover:bg-surface-2 hover:text-ink border border-line-2'
                   ]"
                 >
                   <Mail class="h-4 w-4" />
-                  실패 메일 리포팅 설정
+                  실패 알림 & 탐색 주기 설정
                 </button>
               </div>
 
@@ -979,23 +1034,20 @@ const getBadgeClass = (tenant: Tenant) => {
                       @click="selectedLogLevel = lvl.value"
                       :class="[
                         'flex flex-col items-start rounded-xl border p-3 text-left transition-all cursor-pointer',
-                        selectedLogLevel === lvl.value 
-                          ? 'border-primary ring-2 ring-primary/20 bg-surface shadow-sm' 
-                          : `${lvl.color} opacity-80 hover:opacity-100`
+                        selectedLogLevel === lvl.value
+                          ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
+                          : 'border-line-2 bg-surface hover:border-line hover:bg-surface-2'
                       ]"
                     >
-                      <div class="flex w-full items-center justify-between font-mono text-[13px] font-bold">
-                        <span>{{ lvl.label }}</span>
-                        <CheckCircle2 v-if="selectedLogLevel === lvl.value" class="h-4 w-4 text-primary" />
-                      </div>
-                      <span class="mt-1 text-[11px] opacity-80 leading-snug">{{ lvl.desc }}</span>
+                      <span class="font-mono text-[13px] font-bold text-ink">{{ lvl.label }}</span>
+                      <span class="mt-1 text-[10.5px] text-muted leading-tight">{{ lvl.desc }}</span>
                     </button>
                   </div>
                 </div>
 
-                <!-- Log Level Batch Result Message -->
+                <!-- Log Level Feedback Messages -->
                 <div v-if="logLevelResult.message" :class="[
-                  'flex items-center gap-2 rounded-lg border p-3 text-[12px] font-medium',
+                  'flex items-center gap-2 rounded-lg border p-2.5 text-[11.5px] font-medium animate-fade',
                   logLevelResult.success === true 
                     ? 'border-pass-line bg-pass-bg text-pass' 
                     : logLevelResult.success === false 
@@ -1009,92 +1061,202 @@ const getBadgeClass = (tenant: Tenant) => {
                 </div>
               </div>
 
-              <!-- TAB 2: Email Reporting & SMTP Config -->
-              <div v-if="activeTab === 'email'" class="space-y-3.5 animate-fade">
-                <!-- Enable Email Alerting Toggle -->
-                <div class="flex items-center justify-between rounded-xl border border-line-2 bg-surface p-3 shadow-sm">
+              <!-- TAB 2: Email Reporting & Recipients Config -->
+              <div v-if="activeTab === 'email'" class="space-y-3 animate-fade">
+                <!-- Info Banner -->
+                <div class="rounded-lg border border-primary/20 bg-primary-tint/30 p-2.5 text-[12px] leading-relaxed text-[#3B4257]">
+                  <div class="font-semibold text-primary mb-0.5 flex items-center gap-1.5">
+                    <Info class="h-4 w-4" />
+                    실패 메시지 자동 알림 & 탐색 주기 (PUT /api/tenants/{id}/notifications)
+                  </div>
+                  지정한 주기마다 SAP IS에서 메시지 처리 실패 건(MPL Error)을 탐색하여 등록된 수신자에게 실시간 리포트를 자동 발송합니다.
+                </div>
+
+                <!-- 1. Enable Email Alerting Toggle -->
+                <div class="flex items-center justify-between rounded-xl border border-line-2 bg-surface p-3 shadow-xs">
                   <div class="flex items-center gap-2.5">
                     <ShieldCheck class="h-5 w-5 text-primary" />
                     <div>
-                      <div class="text-[12.5px] font-bold text-ink">실패 메시지 메일 리포팅 활성화</div>
-                      <div class="text-[11px] text-muted">테넌트에서 오류 발생 시 등록된 이메일로 즉시 알림 발송</div>
+                      <div class="text-[12.5px] font-bold text-ink">실패 메시지 메일 알림 활성화</div>
+                      <div class="text-[11px] text-muted">
+                        {{ lastNotifiedAt ? `마지막 알림 발송: ${lastNotifiedAt.replace('T', ' ').substring(0, 19)}` : '테넌트 오류 발생 시 등록된 수신자 목록으로 즉시 알림 발송' }}
+                      </div>
                     </div>
                   </div>
                   <label class="relative inline-flex cursor-pointer items-center">
-                    <input type="checkbox" v-model="emailConfig.enabled" class="peer sr-only" />
+                    <input type="checkbox" v-model="notificationEnabled" class="peer sr-only" />
                     <div class="peer h-6 w-11 rounded-full bg-surface-2 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none"></div>
                   </label>
                 </div>
 
-                <!-- SMTP Server Details -->
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-12">
-                  <div class="sm:col-span-7">
-                    <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">SMTP 서버 주소</label>
-                    <input type="text" v-model="emailConfig.smtpHost" class="w-full rounded-[9px] border border-line-2 bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none" placeholder="smtp.office365.com" />
+                <!-- 2. Inspection Interval Config -->
+                <div class="rounded-xl border border-line-2 bg-surface p-3 space-y-2.5 shadow-xs">
+                  <div class="flex items-center justify-between">
+                    <label class="text-[12.5px] font-bold text-ink flex items-center gap-1.5">
+                      <Clock class="h-4 w-4 text-primary" />
+                      <span>실패 메시지 탐색 주기</span>
+                    </label>
+                    <span class="rounded bg-primary-tint px-2.5 py-0.5 font-mono text-[11px] font-bold text-primary">
+                      매 {{ intervalMinutes }}분마다 자동 탐색
+                    </span>
                   </div>
-                  <div class="sm:col-span-2">
-                    <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">포트</label>
-                    <input type="number" v-model="emailConfig.smtpPort" class="w-full rounded-[9px] border border-line-2 bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none" placeholder="587" />
-                  </div>
-                  <div class="sm:col-span-3">
-                    <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">보안 프로토콜</label>
-                    <select v-model="emailConfig.security" class="w-full rounded-[9px] border border-line-2 bg-surface px-2.5 py-1.5 font-sans text-[12px] text-ink transition focus:border-primary focus:outline-none">
-                      <option value="STARTTLS">STARTTLS</option>
-                      <option value="SSL_TLS">SSL/TLS</option>
-                      <option value="NONE">None</option>
-                    </select>
+
+                  <!-- Preset Buttons & Direct Input -->
+                  <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <button
+                      v-for="preset in [5, 10, 15, 30, 60]"
+                      :key="preset"
+                      type="button"
+                      @click="intervalMinutes = preset"
+                      :class="[
+                        'rounded-lg border px-2.5 py-1 text-[11.5px] font-bold transition-all cursor-pointer',
+                        intervalMinutes === preset
+                          ? 'border-primary bg-primary text-white shadow-xs'
+                          : 'border-line-2 bg-surface text-ink hover:border-line hover:bg-surface-2'
+                      ]"
+                    >
+                      {{ preset }}분{{ preset === 10 ? ' (기본)' : '' }}
+                    </button>
+
+                    <div class="flex items-center gap-1.5 pl-2 border-l border-line-2">
+                      <span class="text-[11px] text-muted font-medium">직접 입력:</span>
+                      <div class="flex items-center">
+                        <input 
+                          type="number" 
+                          v-model.number="intervalMinutes" 
+                          min="1" 
+                          max="1440"
+                          class="w-14 rounded-[7px] border border-line-2 bg-surface px-1.5 py-0.5 text-center font-mono text-[11.5px] text-ink transition focus:border-primary focus:outline-none" 
+                        />
+                        <span class="ml-1 text-[11px] text-muted">분</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <!-- SMTP Auth User / Password -->
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">SMTP 인증 계정 (User)</label>
-                    <input type="text" v-model="emailConfig.username" class="w-full rounded-[9px] border border-line-2 bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none" placeholder="user@company.com" />
+                <!-- 3. Recipient Addition Form -->
+                <div class="rounded-xl border border-line-2 bg-surface p-3 space-y-2.5 shadow-xs">
+                  <div class="flex items-center justify-between">
+                    <label class="text-[12.5px] font-bold text-ink flex items-center gap-1.5">
+                      <Mail class="h-4 w-4 text-primary" />
+                      <span>알림 수신자 목록 ({{ recipientList.length }}명)</span>
+                    </label>
+                    <span class="text-[11px] text-muted">엔터 키 또는 추가 버튼으로 등록</span>
                   </div>
-                  <div>
-                    <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">SMTP 비밀번호</label>
-                    <input type="password" v-model="emailConfig.password" class="w-full rounded-[9px] border border-line-2 bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none" placeholder="••••••••" />
+
+                  <!-- Input Row -->
+                  <div class="flex gap-2">
+                    <div class="relative flex-1">
+                      <input 
+                        type="email" 
+                        v-model="newRecipientInput" 
+                        @keydown.enter.prevent="handleAddRecipient"
+                        class="w-full rounded-[9px] border border-line-2 bg-surface px-3 py-1.5 pl-9 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" 
+                        placeholder="수신자 이메일 주소 입력 (예: admin@company.com)" 
+                      />
+                      <Mail class="absolute left-3 top-2 h-4 w-4 text-muted" />
+                    </div>
+                    <button 
+                      type="button" 
+                      @click="handleAddRecipient" 
+                      class="flex items-center gap-1.5 rounded-[9px] bg-primary px-3 py-1.5 text-[12px] font-bold text-white shadow-xs transition hover:bg-primary-600 cursor-pointer shrink-0"
+                    >
+                      <Plus class="h-3.5 w-3.5" />
+                      <span>추가</span>
+                    </button>
+                  </div>
+
+                  <!-- Error message -->
+                  <div v-if="recipientInputError" class="text-[11.5px] font-medium text-fail flex items-center gap-1">
+                    <AlertCircle class="h-3.5 w-3.5" />
+                    <span>{{ recipientInputError }}</span>
+                  </div>
+
+                  <!-- Recipient Badges / List -->
+                  <div v-if="recipientList.length === 0" class="rounded-lg border border-dashed border-line-2 bg-surface-2/40 p-3 text-center text-[11.5px] text-muted">
+                    <Mail class="h-4 w-4 mx-auto mb-1 text-faint opacity-60" />
+                    등록된 수신자 이메일이 없습니다. 상단 입력창에 이메일을 입력하고 [추가]를 눌러주세요.
+                  </div>
+
+                  <div v-else class="max-h-32 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                    <div 
+                      v-for="(email, idx) in recipientList" 
+                      :key="idx"
+                      class="flex items-center justify-between rounded-lg border border-line bg-surface-2/60 px-2.5 py-1 text-[11.5px] transition hover:bg-surface-2"
+                    >
+                      <div class="flex items-center gap-2 font-mono text-ink">
+                        <span class="flex h-4 w-4 items-center justify-center rounded-full bg-primary-tint text-[9.5px] font-bold text-primary">
+                          {{ idx + 1 }}
+                        </span>
+                        <span class="font-medium">{{ email }}</span>
+                      </div>
+                      <button 
+                        type="button" 
+                        @click="handleRemoveRecipient(idx)" 
+                        class="rounded p-0.5 text-muted hover:bg-fail-bg hover:text-fail transition cursor-pointer"
+                        title="수신자 삭제"
+                      >
+                        <Trash2 class="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <!-- Sender & Recipients -->
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">발신자 이메일 (Sender)</label>
-                    <input type="text" v-model="emailConfig.senderEmail" class="w-full rounded-[9px] border border-line-2 bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none" placeholder="alert@iflow-sentinel.com" />
+                <!-- 4. Test Email Quick Section -->
+                <div class="rounded-xl border border-line-2 bg-surface-2/40 p-2.5 space-y-1.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-bold text-ink flex items-center gap-1.5">
+                      <Send class="h-3 w-3 text-[#7C3AED]" />
+                      <span>테스트 메일 즉시 발송</span>
+                    </span>
+                    <span class="text-[10px] text-muted">미입력 시 첫 번째 등록 수신자로 발송</span>
                   </div>
-                  <div>
-                    <label class="mb-1 block text-[11.5px] font-semibold text-[#3B4257]">수신자 이메일 목록 (쉼표 구분)</label>
-                    <input type="text" v-model="emailConfig.recipientEmails" class="w-full rounded-[9px] border border-line-2 bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink transition focus:border-primary focus:outline-none" placeholder="op1@co.com, op2@co.com" />
+
+                  <div class="flex gap-2">
+                    <input 
+                      type="email" 
+                      v-model="testTargetEmail" 
+                      :placeholder="recipientList.length > 0 ? `기본 수신자: ${recipientList[0]}` : '발송 대상 이메일 주소 입력'"
+                      class="flex-1 rounded-[8px] border border-line-2 bg-surface px-2.5 py-1 font-mono text-[11.5px] text-ink transition focus:border-[#7C3AED] focus:outline-none" 
+                    />
+                    <button 
+                      type="button" 
+                      @click="handleTestNotification" 
+                      :disabled="isTestingNotification"
+                      class="flex items-center gap-1 rounded-[8px] border border-line-2 bg-surface px-2.5 py-1 text-[11.5px] font-semibold text-ink shadow-xs transition hover:border-[#D0D5E1] hover:bg-surface-2 disabled:opacity-50 cursor-pointer shrink-0"
+                    >
+                      <RotateCw v-if="isTestingNotification" class="h-3 w-3 animate-spin text-primary" />
+                      <Send v-else class="h-3 w-3 text-[#7C3AED]" />
+                      <span>테스트 발송</span>
+                    </button>
                   </div>
                 </div>
 
                 <!-- Test / Save Feedback Messages -->
-                <div v-if="emailTestResult.message || emailSaveResult.message" class="space-y-1.5 pt-1">
-                  <div v-if="emailTestResult.message" :class="[
-                    'flex items-center gap-2 rounded-lg border p-2.5 text-[11.5px] font-medium',
-                    emailTestResult.success ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail/30 bg-fail-bg text-fail'
+                <div v-if="notificationTestResult.message || notificationSaveResult.message" class="space-y-1.5 pt-0.5">
+                  <div v-if="notificationTestResult.message" :class="[
+                    'flex items-center gap-2 rounded-lg border p-2 text-[11px] font-medium',
+                    notificationTestResult.success ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail/30 bg-fail-bg text-fail'
                   ]">
-                    <CheckCircle2 v-if="emailTestResult.success" class="h-3.5 w-3.5 shrink-0" />
+                    <CheckCircle2 v-if="notificationTestResult.success" class="h-3.5 w-3.5 shrink-0" />
                     <AlertCircle v-else class="h-3.5 w-3.5 shrink-0" />
-                    <span>{{ emailTestResult.message }}</span>
+                    <span>{{ notificationTestResult.message }}</span>
                   </div>
 
-                  <div v-if="emailSaveResult.message" :class="[
-                    'flex items-center gap-2 rounded-lg border p-2.5 text-[11.5px] font-medium',
-                    emailSaveResult.success ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail/30 bg-fail-bg text-fail'
+                  <div v-if="notificationSaveResult.message" :class="[
+                    'flex items-center gap-2 rounded-lg border p-2 text-[11px] font-medium',
+                    notificationSaveResult.success ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail/30 bg-fail-bg text-fail'
                   ]">
-                    <CheckCircle2 v-if="emailSaveResult.success" class="h-3.5 w-3.5 shrink-0" />
+                    <CheckCircle2 v-if="notificationSaveResult.success" class="h-3.5 w-3.5 shrink-0" />
                     <AlertCircle v-else class="h-3.5 w-3.5 shrink-0" />
-                    <span>{{ emailSaveResult.message }}</span>
+                    <span>{{ notificationSaveResult.message }}</span>
                   </div>
                 </div>
               </div>
             </div>
 
             <!-- Tab Action Footers -->
-            <div class="mt-5 border-t border-line/60 pt-4 flex items-center justify-end gap-2">
+            <div class="mt-4 border-t border-line/60 pt-3.5 flex items-center justify-end gap-2">
               <template v-if="activeTab === 'logLevel'">
                 <button 
                   @click="handleApplyLogLevelBatch" 
@@ -1108,20 +1270,13 @@ const getBadgeClass = (tenant: Tenant) => {
 
               <template v-if="activeTab === 'email'">
                 <button 
-                  @click="handleTestEmailConfig" 
-                  :disabled="isTestingEmail"
-                  class="flex items-center gap-1.5 rounded-[10px] border border-line-2 bg-surface px-3 py-2 text-[12px] font-semibold text-ink shadow-sm transition hover:border-[#D0D5E1] hover:bg-surface-2 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  <Send :class="['h-3.5 w-3.5', isTestingEmail ? 'animate-pulse' : '']" />
-                  테스트 메일 발송
-                </button>
-                <button 
-                  @click="handleSaveEmailConfig" 
-                  :disabled="isSavingEmail"
+                  @click="handleSaveNotificationConfig" 
+                  :disabled="isSavingNotification"
                   class="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#5666F2] to-[#4C5DF0] px-4 py-2 text-[12.5px] font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 >
-                  <Mail class="h-3.5 w-3.5" />
-                  메일 설정 저장
+                  <RotateCw v-if="isSavingNotification" class="h-3.5 w-3.5 animate-spin" />
+                  <Mail v-else class="h-3.5 w-3.5" />
+                  <span>{{ isSavingNotification ? '저장 중…' : '알림 및 주기 설정 저장' }}</span>
                 </button>
               </template>
             </div>

@@ -1,5 +1,5 @@
-import type { CheckRun, Finding, Tenant, IFlow, AppRule, TrackerArtifact, Project, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, TenantEmailConfig, LogLevel, TenantLogLevelResponse, TenantLogLevelRequest } from '../types';
-export type { AppRule, TrackerArtifact, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, TenantEmailConfig, LogLevel, LogLevelType, TenantLogLevelResponse, TenantLogLevelRequest } from "../types";
+import type { CheckRun, Finding, Tenant, IFlow, AppRule, TrackerArtifact, Project, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, LogLevel, TenantLogLevelResponse, TenantLogLevelRequest, TenantNotificationConfig, TenantNotificationConfigRequest, TestEmailRequest } from '../types';
+export type { AppRule, TrackerArtifact, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, LogLevel, LogLevelType, TenantLogLevelResponse, TenantLogLevelRequest, TenantNotificationConfig, TenantNotificationConfigRequest, TestEmailRequest } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -64,7 +64,6 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
 // 테넌트 x 아티팩트 저장소 수동 매핑 인메모리 스토어 (프론트 데모 / 백엔드 연동 전)
 const storageMappingStore = new Map<string, StorageMapping>();
 const reprocessHistoryStore: ReprocessHistoryEntry[] = [];
-const tenantEmailConfigStore = new Map<number, TenantEmailConfig>();
 
 export const apiService = {
   async getProjects(): Promise<Project[]> {
@@ -738,76 +737,53 @@ export const apiService = {
     }
   },
 
-  async getTenantEmailConfig(tenantId: number): Promise<TenantEmailConfig> {
+  async getTenantNotificationConfig(tenantId: number): Promise<TenantNotificationConfig | null> {
     try {
-      const config = await fetchApi<TenantEmailConfig>(`/tenants/${tenantId}/email-config`);
+      const config = await fetchApi<TenantNotificationConfig>(`/tenants/${tenantId}/notifications`);
       if (config) return config;
-    } catch (e) {
-      // Fallback to store or default
-    }
-
-    if (tenantEmailConfigStore.has(tenantId)) {
-      return tenantEmailConfigStore.get(tenantId)!;
-    }
-
-    return {
-      tenantId,
-      enabled: false,
-      smtpHost: 'smtp.office365.com',
-      smtpPort: 587,
-      security: 'STARTTLS',
-      username: '',
-      password: '',
-      senderEmail: 'alert@iflow-sentinel.com',
-      recipientEmails: 'admin@company.com'
-    };
-  },
-
-  async saveTenantEmailConfig(tenantId: number, config: TenantEmailConfig): Promise<{ success: boolean; message: string; data?: TenantEmailConfig }> {
-    const payload = { ...config, tenantId };
-    try {
-      const res = await fetchApi<TenantEmailConfig>(`/tenants/${tenantId}/email-config`, {
-        method: 'PUT',
-        body: JSON.stringify(payload)
-      });
-      tenantEmailConfigStore.set(tenantId, res || payload);
-      return {
-        success: true,
-        message: '메일 알림 및 SMTP 설정이 성공적으로 저장되었습니다.',
-        data: res || payload
-      };
+      return null;
     } catch (e: any) {
-      // Mock Fallback
-      tenantEmailConfigStore.set(tenantId, payload);
-      return {
-        success: true,
-        message: '메일 알림 및 SMTP 설정이 저장되었습니다.',
-        data: payload
-      };
+      console.warn(`Failed to fetch notification config for tenant ${tenantId}:`, e);
+      return null;
     }
   },
 
-  async testTenantEmailConfig(tenantId: number, config: TenantEmailConfig): Promise<{ success: boolean; message: string }> {
+  async saveTenantNotificationConfig(tenantId: number, config: TenantNotificationConfigRequest): Promise<{ success: boolean; message: string; data?: TenantNotificationConfig }> {
     try {
-      const res = await fetchApi<any>(`/tenants/${tenantId}/email-config/test`, {
-        method: 'POST',
+      const res = await fetchApi<TenantNotificationConfig>(`/tenants/${tenantId}/notifications`, {
+        method: 'PUT',
         body: JSON.stringify(config)
       });
       return {
-        success: res?.success ?? true,
-        message: res?.message || `[${config.recipientEmails}] 주소로 테스트 메일이 성공적으로 발송되었습니다.`
+        success: true,
+        message: '실패 알림 수신자 설정이 성공적으로 저장되었습니다.',
+        data: res
       };
     } catch (e: any) {
-      // Mock Fallback
-      if (!config.smtpHost || !config.recipientEmails) {
-        return {
-          success: false,
-          message: 'SMTP 호스트 주소와 수신 이메일 주소를 입력해 주세요.'
-        };
-      }
+      console.error('Failed to save notification config:', e);
+      return {
+        success: false,
+        message: e.message || '알림 수신자 설정 저장 중 오류가 발생했습니다.'
+      };
+    }
+  },
+
+  async sendTestNotificationEmail(tenantId: number, targetEmail: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const payload: TestEmailRequest = { targetEmail };
+      await fetchApi<void>(`/tenants/${tenantId}/notifications/test-mail`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
       return {
         success: true,
-        message: `테스트 발송 성공: SMTP [${config.smtpHost}:${config.smtpPort}] -> [${config.recipientEmails}] 메일이 정상 전달되었습니다.`
+        message: `[${targetEmail}] 주소로 테스트 메일이 성공적으로 발송되었습니다.`
+      };
+    } catch (e: any) {
+      console.error('Failed to send test email:', e);
+      return {
+        success: false,
+        message: e.message || '테스트 메일 발송에 실패했습니다.'
       };
     }
   }

@@ -47,6 +47,26 @@ export interface TenantLogLevelConfig {
   targetPackageId?: number;
 }
 
+export interface TenantNotificationConfig {
+  id?: number;
+  tenantId: number;
+  tenantName?: string;
+  isEnabled: boolean;
+  recipients: string;
+  intervalMinutes?: number; // 실패 메시지 탐색 주기 (분 단위, 기본값: 10)
+  lastNotifiedAt?: string;
+}
+
+export interface TenantNotificationConfigRequest {
+  isEnabled: boolean;
+  recipients: string;
+  intervalMinutes?: number; // 실패 메시지 탐색 주기 (분 단위)
+}
+
+export interface TestEmailRequest {
+  targetEmail: string;
+}
+
 export interface TenantEmailConfig {
   tenantId?: number;
   enabled: boolean;
