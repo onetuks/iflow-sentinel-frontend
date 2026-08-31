@@ -1,7 +1,9 @@
 import type { CheckRun, Finding, Tenant, IFlow, AppRule, TrackerArtifact, Project, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, LogLevel, TenantLogLevelResponse, TenantLogLevelRequest, TenantNotificationConfig, TenantNotificationConfigRequest, TestEmailRequest } from '../types';
 export type { AppRule, TrackerArtifact, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, LogLevel, LogLevelType, TenantLogLevelResponse, TenantLogLevelRequest, TenantNotificationConfig, TenantNotificationConfigRequest, TestEmailRequest } from "../types";
+import { useAdminKey } from '../composables/useAdminKey';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const { getAdminKey } = useAdminKey();
 
 /** Spring Boot Long 타입 파라미터 요구사항에 맞추어 숫자로 안전 변환하는 헬퍼 함수 */
 function toLongId(val: any): number | undefined {
@@ -21,6 +23,7 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache',
       'Pragma': 'no-cache',
+      'X-Admin-Key': getAdminKey(),
       ...options?.headers,
     },
   });
@@ -105,7 +108,7 @@ export const apiService = {
   async createTenant(tenant: Partial<Tenant>): Promise<{ status: number; data?: Tenant }> {
     const response = await fetch(`${API_BASE}/tenants`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': getAdminKey() },
       body: JSON.stringify(tenant)
     });
     const data = await response.json().catch(() => ({}));
@@ -114,7 +117,7 @@ export const apiService = {
   async updateTenant(id: number, tenant: Partial<Tenant>): Promise<{ status: number; data?: Tenant }> {
     const response = await fetch(`${API_BASE}/tenants/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': getAdminKey() },
       body: JSON.stringify(tenant)
     });
     const data = await response.json().catch(() => ({}));
@@ -122,7 +125,8 @@ export const apiService = {
   },
   async deleteTenant(id: number): Promise<{ status: number }> {
     const response = await fetch(`${API_BASE}/tenants/${id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: { 'X-Admin-Key': getAdminKey() }
     });
     return { status: response.status };
   },
@@ -236,7 +240,7 @@ export const apiService = {
       const query = artifactIds.map(id => `artifactIds=${encodeURIComponent(id)}`).join('&');
       url += `?${query}`;
     }
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: { 'X-Admin-Key': getAdminKey() } });
     if (!response.ok) {
       throw new Error(`Export failed with status: ${response.status}`);
     }
