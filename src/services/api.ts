@@ -1,9 +1,23 @@
 import type { CheckRun, Finding, Tenant, IFlow, AppRule, TrackerArtifact, Project, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, LogLevel, TenantLogLevelResponse, TenantLogLevelRequest, TenantNotificationConfig, TenantNotificationConfigRequest, TestEmailRequest } from '../types';
 export type { AppRule, TrackerArtifact, DataStoreEntryLookupResult, ReprocessExecutionResult, ReprocessHistoryEntry, MplFailureLog, StorageMapping, ReprocessSupportType, LogLevel, LogLevelType, TenantLogLevelResponse, TenantLogLevelRequest, TenantNotificationConfig, TenantNotificationConfigRequest, TestEmailRequest } from "../types";
-import { useAdminKey } from '../composables/useAdminKey';
+import { useAuth } from '../composables/useAuth';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
-const { getAdminKey } = useAdminKey();
+const { getToken, logout } = useAuth();
+
+/** Authorization: Bearer 헤더 (토큰이 없으면 빈 객체) */
+function authHeader(): Record<string, string> {
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+/** 401 응답 수신 시 로그아웃 처리 후 로그인 페이지로 이동 */
+function handleUnauthorized(status: number) {
+  if (status === 401) {
+    logout();
+    window.location.href = '/login';
+  }
+}
 
 /** Spring Boot Long 타입 파라미터 요구사항에 맞추어 숫자로 안전 변환하는 헬퍼 함수 */
 function toLongId(val: any): number | undefined {
@@ -23,7 +37,7 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache',
       'Pragma': 'no-cache',
-      'X-Admin-Key': getAdminKey(),
+      ...authHeader(),
       ...options?.headers,
     },
   });
@@ -36,6 +50,7 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
         ...options,
         headers: {
           'Content-Type': 'application/json',
+          ...authHeader(),
           ...options?.headers,
         },
       });
@@ -48,6 +63,7 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
+    handleUnauthorized(response.status);
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.message || `API Error: ${response.status}`);
   }
@@ -69,6 +85,12 @@ const storageMappingStore = new Map<string, StorageMapping>();
 const reprocessHistoryStore: ReprocessHistoryEntry[] = [];
 
 export const apiService = {
+  async login(username: string, password: string): Promise<{ accessToken: string; username: string; role: string }> {
+    return fetchApi<{ accessToken: string; username: string; role: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+  },
   async getProjects(): Promise<Project[]> {
     return fetchApi<Project[]>('/projects');
   },
@@ -88,8 +110,10 @@ export const apiService = {
   },
   async deleteProject(id: number): Promise<{ status: number }> {
     const response = await fetch(`${API_BASE}/projects/${id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: { ...authHeader() }
     });
+    handleUnauthorized(response.status);
     return { status: response.status };
   },
   async getRunSteps(): Promise<any[]> {
@@ -108,32 +132,37 @@ export const apiService = {
   async createTenant(tenant: Partial<Tenant>): Promise<{ status: number; data?: Tenant }> {
     const response = await fetch(`${API_BASE}/tenants`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': getAdminKey() },
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify(tenant)
     });
+    handleUnauthorized(response.status);
     const data = await response.json().catch(() => ({}));
     return { status: response.status, data };
   },
   async updateTenant(id: number, tenant: Partial<Tenant>): Promise<{ status: number; data?: Tenant }> {
     const response = await fetch(`${API_BASE}/tenants/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': getAdminKey() },
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify(tenant)
     });
+    handleUnauthorized(response.status);
     const data = await response.json().catch(() => ({}));
     return { status: response.status, data };
   },
   async deleteTenant(id: number): Promise<{ status: number }> {
     const response = await fetch(`${API_BASE}/tenants/${id}`, {
       method: 'DELETE',
-      headers: { 'X-Admin-Key': getAdminKey() }
+      headers: { ...authHeader() }
     });
+    handleUnauthorized(response.status);
     return { status: response.status };
   },
   async syncTenant(id: number): Promise<{ status: number }> {
     const response = await fetch(`${API_BASE}/tenants/${id}/sync`, {
-      method: 'POST'
+      method: 'POST',
+      headers: { ...authHeader() }
     });
+    handleUnauthorized(response.status);
     return { status: response.status };
   },
   async testTenantConnection(tenant: Partial<Tenant>): Promise<{ success: boolean; message: string }> {
@@ -240,8 +269,9 @@ export const apiService = {
       const query = artifactIds.map(id => `artifactIds=${encodeURIComponent(id)}`).join('&');
       url += `?${query}`;
     }
-    const response = await fetch(url, { headers: { 'X-Admin-Key': getAdminKey() } });
+    const response = await fetch(url, { headers: { ...authHeader() } });
     if (!response.ok) {
+      handleUnauthorized(response.status);
       throw new Error(`Export failed with status: ${response.status}`);
     }
     return response.blob();
@@ -251,9 +281,11 @@ export const apiService = {
     formData.append('file', file);
     const response = await fetch(`${API_BASE}/parser/test`, {
       method: 'POST',
+      headers: { ...authHeader() },
       body: formData,
     });
     if (!response.ok) {
+      handleUnauthorized(response.status);
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.message || `API Error: ${response.status}`);
     }
@@ -644,8 +676,10 @@ export const apiService = {
   /** 재처리 히스토리 삭제 (DELETE /api/reprocess/histories/{id}) */
   async deleteReprocessHistory(id: number): Promise<{ status: number }> {
     const response = await fetch(`${API_BASE}/reprocess/histories/${id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: { ...authHeader() }
     });
+    handleUnauthorized(response.status);
     // 인메모리 스토어 동기화
     const idx = reprocessHistoryStore.findIndex(h => h.id === id);
     if (idx !== -1) {

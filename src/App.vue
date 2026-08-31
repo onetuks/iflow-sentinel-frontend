@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, provide } from 'vue';
+import { ref, onMounted, provide, watch } from 'vue';
 import Sidebar from './components/Sidebar.vue';
 import Topbar from './components/Topbar.vue';
 import GlobalTaskHub from './components/GlobalTaskHub.vue';
 import { apiService } from './services/api';
+import { useAuth } from './composables/useAuth';
+
+const { isAuthenticated } = useAuth();
 
 const currentProject = ref('');
 const isSidebarOpen = ref(false); // 모바일 환경 대응
@@ -13,6 +16,7 @@ provide('currentProject', currentProject);
 provide('projects', projects);
 
 const fetchProjects = async () => {
+  if (!isAuthenticated.value) return;
   projects.value = await apiService.getProjects();
   // If current project was deleted, or not set
   if (!projects.value.find(p => p.name === currentProject.value)) {
@@ -25,6 +29,9 @@ const fetchProjects = async () => {
 };
 
 onMounted(fetchProjects);
+watch(isAuthenticated, (loggedIn) => {
+  if (loggedIn) fetchProjects();
+});
 
 const handleProjectChange = (projectName: string) => {
   currentProject.value = projectName;
@@ -32,9 +39,12 @@ const handleProjectChange = (projectName: string) => {
 </script>
 
 <template>
-  <div class="flex min-h-screen w-full">
+  <!-- 로그인 전: 레이아웃 없이 로그인 화면만 노출 -->
+  <router-view v-if="!isAuthenticated" />
+
+  <div v-else class="flex min-h-screen w-full">
     <!-- 사이드바 -->
-    <Sidebar 
+    <Sidebar
       :current-project="currentProject"
       :projects="projects"
       :is-open="isSidebarOpen"
@@ -42,10 +52,10 @@ const handleProjectChange = (projectName: string) => {
       @refresh-projects="fetchProjects"
       @close="isSidebarOpen = false"
     />
-    
+
     <!-- 메인 컨텐츠 영역 -->
     <div class="flex-1 flex min-w-0 flex-col relative w-full">
-      <Topbar 
+      <Topbar
         :current-project="currentProject"
         @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
       />

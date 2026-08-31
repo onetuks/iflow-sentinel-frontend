@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import Overview from '../views/Overview.vue';
 import Landscape from '../views/Landscape.vue';
 import Rulesets from '../views/Rulesets.vue';
+import { useAuth } from '../composables/useAuth';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -9,6 +10,12 @@ const router = createRouter({
     {
       path: '/',
       redirect: '/landscape'
+    },
+    {
+      path: '/login',
+      name: 'Login',
+      component: () => import('../views/Login.vue'),
+      meta: { public: true }
     },
     {
       path: '/overview',
@@ -61,6 +68,18 @@ const router = createRouter({
       component: () => import('../views/MessageReprocess.vue')
     }
   ]
+});
+
+router.beforeEach((to) => {
+  const { isAuthenticated } = useAuth();
+
+  if (!to.meta.public && !isAuthenticated.value) {
+    return { name: 'Login', query: { redirect: to.fullPath } };
+  }
+  if (to.name === 'Login' && isAuthenticated.value) {
+    return { path: '/landscape' };
+  }
+  return true;
 });
 
 export default router;

@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router';
-import { computed, ref } from 'vue';
-import { Bell, Menu, KeyRound } from 'lucide-vue-next';
-import { useAdminKey } from '../composables/useAdminKey';
-import AdminKeyModal from './AdminKeyModal.vue';
+import { useRoute, useRouter } from 'vue-router';
+import { computed } from 'vue';
+import { Bell, Menu, LogOut } from 'lucide-vue-next';
+import { useAuth } from '../composables/useAuth';
 
 defineProps<{
   currentProject: string;
@@ -14,8 +13,14 @@ defineEmits<{
 }>();
 
 const route = useRoute();
-const { adminKey } = useAdminKey();
-const isAdminKeyModalOpen = ref(false);
+const router = useRouter();
+const { username, logout } = useAuth();
+
+const handleLogout = () => {
+  logout();
+  router.push('/login');
+};
+
 const screenName = computed(() => {
   if (route.name === 'Overview') return '대시보드';
   if (route.name === 'Landscape') return '랜드스케이프';
@@ -51,22 +56,18 @@ const screenName = computed(() => {
         <Search class="h-[15px] w-[15px]" />
         iFlow 검색…
       </div> -->
-      <button
-        class="relative flex h-9 w-9 items-center justify-center rounded-[10px] border border-line-2 bg-surface text-muted transition hover:border-[#D2D6E2] hover:text-ink"
-        title="관리자 키 설정"
-        @click="isAdminKeyModalOpen = true"
-      >
-        <KeyRound class="h-[17px] w-[17px]" />
-        <span
-          v-if="!adminKey"
-          class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-fail"
-        />
-      </button>
       <button class="flex h-9 w-9 items-center justify-center rounded-[10px] border border-line-2 bg-surface text-muted transition hover:border-[#D2D6E2] hover:text-ink">
         <Bell class="h-[17px] w-[17px]" />
       </button>
+      <div class="mx-1 h-5 w-px bg-line-2" />
+      <span class="hidden text-[12.5px] font-semibold text-muted sm:inline">{{ username }}</span>
+      <button
+        class="flex h-9 w-9 items-center justify-center rounded-[10px] border border-line-2 bg-surface text-muted transition hover:border-[#D2D6E2] hover:text-fail"
+        title="로그아웃"
+        @click="handleLogout"
+      >
+        <LogOut class="h-[17px] w-[17px]" />
+      </button>
     </div>
-
-    <AdminKeyModal v-model="isAdminKeyModalOpen" />
   </header>
 </template>
