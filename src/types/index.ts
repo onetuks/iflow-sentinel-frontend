@@ -16,16 +16,12 @@ export interface Tenant {
   packageCount?: number;
   logLevel?: LogLevel;
   emailConfig?: TenantEmailConfig;
-  // 인터페이스(런타임/재처리) 호출 권한용 인증 정보
+  // 인터페이스(런타임/재처리) 호출 권한용 인증 정보 (Basic Auth)
   interfaceUrl?: string;
-  interfaceClientId?: string;
-  interfaceClientSecret?: string;
   interfaceTokenUrl?: string;
-  // 하위 호환 및 백엔드 DTO 매핑
-  runtimeUrl?: string;
-  runtimeClientId?: string;
-  runtimeClientSecret?: string;
-  runtimeTokenUrl?: string;
+  interfaceAuthType?: 'BASIC' | 'OAUTH2_CLIENT_CREDENTIALS';
+  interfaceUsername?: string;
+  interfacePassword?: string;
 }
 
 export type LogLevel = 'NONE' | 'INFO' | 'ERROR' | 'DEBUG' | 'TRACE';

@@ -59,9 +59,8 @@ const currentTenant = ref<{
   clientSecret: string;
   tokenUrl: string;
   interfaceUrl?: string;
-  interfaceClientId?: string;
-  interfaceClientSecret?: string;
-  interfaceTokenUrl?: string;
+  interfaceUsername?: string;
+  interfacePassword?: string;
 }>({
   name: '',
   platformType: 'CLOUD_FOUNDRY',
@@ -70,15 +69,14 @@ const currentTenant = ref<{
   clientSecret: '',
   tokenUrl: '',
   interfaceUrl: '',
-  interfaceClientId: '',
-  interfaceClientSecret: '',
-  interfaceTokenUrl: ''
+  interfaceUsername: '',
+  interfacePassword: ''
 });
 
 // --- Service Key JSON Import State & Methods ---
 const showJsonModal = ref(false);
 const jsonInput = ref('');
-const jsonImportTarget = ref<'management' | 'interface'>('management');
+const jsonImportTarget = ref<'management'>('management');
 const autoFillName = ref(true);
 
 interface ParsedServiceKey {
@@ -188,8 +186,8 @@ const parsedJsonResult = computed<{
   }
 });
 
-const openJsonModal = (target: 'management' | 'interface' = 'management') => {
-  jsonImportTarget.value = target;
+const openJsonModal = () => {
+  jsonImportTarget.value = 'management';
   jsonInput.value = '';
   showJsonModal.value = true;
 };
@@ -233,24 +231,15 @@ const applyJsonData = (autoTest: boolean = false) => {
 
   const data = parsedJsonResult.value.data;
 
-  if (jsonImportTarget.value === 'management') {
-    if (data.url) currentTenant.value.odataUrl = data.url;
-    if (data.clientId) currentTenant.value.clientId = data.clientId;
-    if (data.clientSecret) currentTenant.value.clientSecret = data.clientSecret;
-    if (data.tokenUrl) currentTenant.value.tokenUrl = data.tokenUrl;
-    if (data.platformType) currentTenant.value.platformType = data.platformType;
-    
-    // 테넌트 이름 자동 적용
-    if (autoFillName.value && data.suggestedName && (!currentTenant.value.name || tenantFormMode.value === 'create')) {
-      currentTenant.value.name = data.suggestedName;
-    }
-  } else {
-    // Interface (Runtime) 인증 정보 적용
-    useSeparateInterfaceAuth.value = true;
-    if (data.url) currentTenant.value.interfaceUrl = data.url;
-    if (data.clientId) currentTenant.value.interfaceClientId = data.clientId;
-    if (data.clientSecret) currentTenant.value.interfaceClientSecret = data.clientSecret;
-    if (data.tokenUrl) currentTenant.value.interfaceTokenUrl = data.tokenUrl;
+  if (data.url) currentTenant.value.odataUrl = data.url;
+  if (data.clientId) currentTenant.value.clientId = data.clientId;
+  if (data.clientSecret) currentTenant.value.clientSecret = data.clientSecret;
+  if (data.tokenUrl) currentTenant.value.tokenUrl = data.tokenUrl;
+  if (data.platformType) currentTenant.value.platformType = data.platformType;
+
+  // 테넌트 이름 자동 적용
+  if (autoFillName.value && data.suggestedName && (!currentTenant.value.name || tenantFormMode.value === 'create')) {
+    currentTenant.value.name = data.suggestedName;
   }
 
   showJsonModal.value = false;
@@ -387,11 +376,6 @@ const handleTestConnection = async () => {
   isTesting.value = true;
   testResult.value = '확인 중…';
   try {
-    const ifUrl = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceUrl : (currentTenant.value.interfaceUrl || '');
-    const ifClientId = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientId : currentTenant.value.clientId;
-    const ifClientSecret = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientSecret : currentTenant.value.clientSecret;
-    const ifTokenUrl = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceTokenUrl : currentTenant.value.tokenUrl;
-
     const payload = {
       id: currentTenant.value.id,
       projectId: currentProjectId.value || 1,
@@ -400,14 +384,10 @@ const handleTestConnection = async () => {
       clientId: currentTenant.value.clientId,
       clientSecret: currentTenant.value.clientSecret,
       tokenUrl: currentTenant.value.tokenUrl,
-      interfaceUrl: ifUrl,
-      interfaceClientId: ifClientId,
-      interfaceClientSecret: ifClientSecret,
-      interfaceTokenUrl: ifTokenUrl,
-      runtimeUrl: ifUrl,
-      runtimeClientId: ifClientId,
-      runtimeClientSecret: ifClientSecret,
-      runtimeTokenUrl: ifTokenUrl,
+      interfaceUrl: currentTenant.value.interfaceUrl || '',
+      interfaceAuthType: (useSeparateInterfaceAuth.value ? 'BASIC' : 'OAUTH2_CLIENT_CREDENTIALS') as any,
+      interfaceUsername: useSeparateInterfaceAuth.value ? currentTenant.value.interfaceUsername : '',
+      interfacePassword: useSeparateInterfaceAuth.value ? currentTenant.value.interfacePassword : '',
       platformType: currentTenant.value.platformType as any,
       authType: 'OAUTH2_CLIENT_CREDENTIALS' as any
     };
@@ -437,9 +417,8 @@ const handleAddTenantClick = () => {
     clientSecret: '',
     tokenUrl: '',
     interfaceUrl: '',
-    interfaceClientId: '',
-    interfaceClientSecret: '',
-    interfaceTokenUrl: ''
+    interfaceUsername: '',
+    interfacePassword: ''
   };
   useSeparateInterfaceAuth.value = false;
   showTenantForm.value = true;
@@ -460,14 +439,7 @@ const handleAddTenantClick = () => {
 
 const handleEditTenantClick = async (tenant: Tenant) => {
   tenantFormMode.value = 'edit';
-  const hasSeparateAuth = !!(
-    tenant.interfaceUrl ||
-    tenant.runtimeUrl ||
-    tenant.interfaceClientId ||
-    tenant.interfaceTokenUrl ||
-    tenant.runtimeClientId ||
-    tenant.runtimeTokenUrl
-  );
+  const hasSeparateAuth = tenant.interfaceAuthType === 'BASIC' || !!tenant.interfaceUsername;
   currentTenant.value = {
     id: tenant.id,
     name: tenant.name,
@@ -476,10 +448,10 @@ const handleEditTenantClick = async (tenant: Tenant) => {
     clientId: tenant.clientId,
     clientSecret: tenant.clientSecret || '',
     tokenUrl: tenant.tokenUrl,
-    interfaceUrl: tenant.interfaceUrl || tenant.runtimeUrl || '',
-    interfaceClientId: tenant.interfaceClientId || tenant.runtimeClientId || '',
-    interfaceClientSecret: tenant.interfaceClientSecret || tenant.runtimeClientSecret || '',
-    interfaceTokenUrl: tenant.interfaceTokenUrl || tenant.runtimeTokenUrl || ''
+    interfaceUrl: tenant.interfaceUrl || '',
+    interfaceUsername: tenant.interfaceUsername || '',
+    // 비밀번호는 보안상 응답에 포함되지 않으므로 비워둠 (변경 시에만 새로 입력)
+    interfacePassword: ''
   };
   useSeparateInterfaceAuth.value = hasSeparateAuth;
   showTenantForm.value = true;
@@ -515,11 +487,6 @@ const handleSaveTenant = async () => {
   
   isSavingTenant.value = true;
 
-  const ifUrl = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceUrl : (currentTenant.value.interfaceUrl || '');
-  const ifClientId = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientId : currentTenant.value.clientId;
-  const ifClientSecret = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceClientSecret : currentTenant.value.clientSecret;
-  const ifTokenUrl = useSeparateInterfaceAuth.value ? currentTenant.value.interfaceTokenUrl : currentTenant.value.tokenUrl;
-
   const payload = {
     projectId: currentProjectId.value,
     name: currentTenant.value.name.trim(),
@@ -527,14 +494,12 @@ const handleSaveTenant = async () => {
     clientId: currentTenant.value.clientId.trim(),
     clientSecret: currentTenant.value.clientSecret,
     tokenUrl: currentTenant.value.tokenUrl.trim(),
-    interfaceUrl: ifUrl,
-    interfaceClientId: ifClientId,
-    interfaceClientSecret: ifClientSecret,
-    interfaceTokenUrl: ifTokenUrl,
-    runtimeUrl: ifUrl,
-    runtimeClientId: ifClientId,
-    runtimeClientSecret: ifClientSecret,
-    runtimeTokenUrl: ifTokenUrl,
+    interfaceUrl: useSeparateInterfaceAuth.value ? (currentTenant.value.interfaceUrl || '').trim() : '',
+    // 별도 등록을 끄면 재처리 시 Management Client ID/Secret으로 인터페이스를 호출한다 (SapODataClient.callInterfaceEndpoint 참고)
+    interfaceAuthType: (useSeparateInterfaceAuth.value ? 'BASIC' : 'OAUTH2_CLIENT_CREDENTIALS') as any,
+    interfaceUsername: useSeparateInterfaceAuth.value ? (currentTenant.value.interfaceUsername || '').trim() : '',
+    // 비어있으면 백엔드가 기존 저장된 비밀번호를 유지한다 (TenantService.update 참고)
+    interfacePassword: useSeparateInterfaceAuth.value ? (currentTenant.value.interfacePassword || '') : '',
     platformType: currentTenant.value.platformType as any,
     authType: 'OAUTH2_CLIENT_CREDENTIALS' as any
   };
@@ -866,17 +831,6 @@ const getBadgeClass = (tenant: Tenant) => {
                   <span>인터페이스 호출 권한 인증 정보 (Runtime)</span>
                 </div>
                 <div class="flex items-center gap-3">
-                  <button 
-                    v-if="useSeparateInterfaceAuth"
-                    type="button"
-                    @click="openJsonModal('interface')"
-                    :disabled="isSavingTenant"
-                    class="flex items-center gap-1 rounded-lg border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-2 py-0.5 text-[11px] font-bold text-[#7C3AED] transition hover:bg-[#7C3AED] hover:text-white cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="런타임 전용 Service Key JSON 붙여넣기"
-                  >
-                    <Zap class="h-3 w-3 text-amber-500 fill-amber-500" />
-                    <span>JSON 붙여넣기</span>
-                  </button>
                   <label class="relative inline-flex items-center cursor-pointer gap-2 text-[11.5px] font-semibold text-muted">
                     <input type="checkbox" v-model="useSeparateInterfaceAuth" :disabled="isSavingTenant" class="sr-only peer" />
                     <div class="w-8 h-4.5 bg-line-2 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-[#7C3AED]"></div>
@@ -887,7 +841,7 @@ const getBadgeClass = (tenant: Tenant) => {
 
               <div v-if="useSeparateInterfaceAuth" class="grid grid-cols-1 gap-3 pt-1 border-t border-line/60">
                 <div class="text-[11px] text-muted leading-relaxed">
-                  재처리 실행 시 타겟 IFlow 런타임 엔드포인트를 호출할 수 있는 런타임 URL 및 인증정보를 입력합니다.
+                  재처리 실행 시 타겟 IFlow 런타임 엔드포인트를 호출할 수 있는 런타임 URL과 Basic 인증 계정(SAP 측 Sender 채널에 등록된 사용자)을 입력합니다.
                 </div>
                 <div>
                   <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Runtime URL (인터페이스 호출 주소)</label>
@@ -895,17 +849,13 @@ const getBadgeClass = (tenant: Tenant) => {
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Client ID</label>
-                    <input type="text" v-model="currentTenant.interfaceClientId" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15 disabled:opacity-60" placeholder="예: sb-..." />
+                    <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Username</label>
+                    <input type="text" v-model="currentTenant.interfaceUsername" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15 disabled:opacity-60" placeholder="예: iflow_reprocess_user" />
                   </div>
                   <div>
-                    <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Client Secret</label>
-                    <input type="password" v-model="currentTenant.interfaceClientSecret" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15 disabled:opacity-60" placeholder="••••••••" />
+                    <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Password</label>
+                    <input type="password" v-model="currentTenant.interfacePassword" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15 disabled:opacity-60" :placeholder="tenantFormMode === 'edit' ? '변경 시에만 입력 (비워두면 기존 값 유지)' : '••••••••'" />
                   </div>
-                </div>
-                <div>
-                  <label class="mb-1 block text-[11px] font-semibold text-[#3B4257]">Interface Token URL</label>
-                  <input type="text" v-model="currentTenant.interfaceTokenUrl" :disabled="isSavingTenant" class="w-full rounded-[10px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-[12px] text-ink transition focus:border-[#7C3AED] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/15 disabled:opacity-60" placeholder="https://..." />
                 </div>
               </div>
               <div v-else class="rounded-lg bg-surface-2/60 px-3 py-2 text-[11.5px] text-muted flex items-center gap-2">
@@ -1300,7 +1250,7 @@ const getBadgeClass = (tenant: Tenant) => {
               <h3 class="m-0 font-disp text-base font-bold text-ink flex items-center gap-2">
                 <span>SAP BTP Service Key JSON 가져오기</span>
                 <span class="rounded-full bg-primary-tint px-2.5 py-0.5 text-[11px] font-semibold text-primary">
-                  {{ jsonImportTarget === 'management' ? 'Management (OData)' : 'Interface (Runtime)' }}
+                  Management (OData)
                 </span>
               </h3>
               <p class="mt-0.5 text-[12px] text-muted">
@@ -1313,32 +1263,8 @@ const getBadgeClass = (tenant: Tenant) => {
           </button>
         </div>
 
-        <!-- Target Selector & Quick Action Bar -->
-        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <!-- Target Radio Tabs -->
-          <div class="flex rounded-lg border border-line-2 bg-surface-2 p-0.5 text-xs font-semibold">
-            <button 
-              type="button"
-              @click="jsonImportTarget = 'management'"
-              :class="[
-                'rounded-md px-3 py-1.5 transition cursor-pointer',
-                jsonImportTarget === 'management' ? 'bg-surface text-primary shadow-xs font-bold' : 'text-muted hover:text-ink'
-              ]"
-            >
-              Management API (OData)
-            </button>
-            <button 
-              type="button"
-              @click="jsonImportTarget = 'interface'"
-              :class="[
-                'rounded-md px-3 py-1.5 transition cursor-pointer',
-                jsonImportTarget === 'interface' ? 'bg-surface text-[#7C3AED] shadow-xs font-bold' : 'text-muted hover:text-ink'
-              ]"
-            >
-              Interface 호출 전용 (Runtime)
-            </button>
-          </div>
-
+        <!-- Quick Action Bar -->
+        <div class="mb-3 flex flex-wrap items-center justify-end gap-2">
           <!-- Quick Action Buttons -->
           <div class="flex items-center gap-1.5">
             <button 
@@ -1419,7 +1345,7 @@ const getBadgeClass = (tenant: Tenant) => {
             </div>
 
             <!-- Auto-Fill Tenant Name Option (For Management Target) -->
-            <div v-if="jsonImportTarget === 'management' && parsedJsonResult.data.suggestedName" class="flex items-center justify-between pt-1 border-t border-pass-line/40">
+            <div v-if="parsedJsonResult.data.suggestedName" class="flex items-center justify-between pt-1 border-t border-pass-line/40">
               <label class="flex items-center gap-2 cursor-pointer text-[11.5px] font-semibold text-ink">
                 <input type="checkbox" v-model="autoFillName" class="rounded text-primary focus:ring-primary h-4 w-4" />
                 <span>추출된 테넌트 이름 자동 반영:</span>
@@ -1464,8 +1390,7 @@ const getBadgeClass = (tenant: Tenant) => {
             <Check class="h-4 w-4" />
             폼에 값 채워넣기
           </button>
-          <button 
-            v-if="jsonImportTarget === 'management'"
+          <button
             type="button"
             @click="applyJsonData(true)"
             :disabled="!parsedJsonResult.isValid"
