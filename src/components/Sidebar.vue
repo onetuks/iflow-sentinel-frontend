@@ -295,7 +295,8 @@ const selectProject = (projectName: string) => {
       </router-link>
     </nav>
 
-    <!-- 사이드바 하단 프로필 -->
+    <!-- 사이드바 하단 프로필 (계정 분리 기능 구현 전까지 임시 비활성화) -->
+    <!--
     <div :class="['mt-auto flex items-center border-t border-line py-3.5', isCollapsed ? 'justify-center px-0' : 'gap-2.5 px-4']">
       <span class="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#6E7BF5] to-[#4C5DF0] font-disp text-xs font-bold text-white">
         박
@@ -304,6 +305,7 @@ const selectProject = (projectName: string) => {
         <span class="truncate block">박세영</span><small class="font-normal text-faint text-[11px] truncate block">Integration Dev</small>
       </div>
     </div>
+    -->
 
     <!-- 팝오버 모달 (축소 시) -->
     <div 
