@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router';
 import { computed } from 'vue';
-import { Bell, Menu, LogOut } from 'lucide-vue-next';
+import { Menu, LogOut } from 'lucide-vue-next';
 import { useAuth } from '../composables/useAuth';
 
 defineProps<{
