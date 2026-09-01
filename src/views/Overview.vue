@@ -75,7 +75,7 @@ const getEnvBadgeClass = (tenantName: string) => {
           <div class="truncate font-disp text-[15px] font-semibold tracking-tight text-ink">
             {{ tenant.name }}
           </div>
-          <div class="mb-3.5 truncate font-mono text-[11.5px] text-muted">{{ tenant.odataUrl }}</div>
+          <div class="mb-3.5 truncate font-mono text-[11.5px] text-muted">{{ tenant.apiUrl }}</div>
           <div class="flex items-center justify-between">
             <span :class="['flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[11.5px] font-semibold', (tenant.status || 'connected') === 'connected' ? 'border-pass-line bg-pass-bg text-pass' : 'border-fail-line bg-fail-bg text-fail']">
               {{ (tenant.status || 'connected') === 'connected' ? '통과' : '보류' }}

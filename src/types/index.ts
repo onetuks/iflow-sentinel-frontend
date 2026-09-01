@@ -6,22 +6,24 @@ export interface Tenant {
   id: number;
   projectId: number;
   name: string;
-  odataUrl: string;
-  clientId: string;
-  clientSecret?: string;
-  tokenUrl: string;
   platformType: TenantPlatform;
+  // API(OData) 활용을 위한 인증 정보
+  apiUrl: string;
+  apiTokenUrl: string;
+  apiClientId: string;
+  apiClientSecret?: string;
+  apiCreateDate?: string;
   status?: 'connected' | 'disconnected' | 'error';
   lastChecked?: string;
   packageCount?: number;
   logLevel?: LogLevel;
   emailConfig?: TenantEmailConfig;
-  // 인터페이스(런타임/재처리) 호출 권한용 인증 정보 (Basic Auth)
-  interfaceUrl?: string;
-  interfaceTokenUrl?: string;
-  interfaceAuthType?: 'BASIC' | 'OAUTH2_CLIENT_CREDENTIALS';
-  interfaceUsername?: string;
-  interfacePassword?: string;
+  // 인터페이스(런타임/재처리) 호출을 위한 인증 정보
+  ifUrl?: string;
+  ifTokenUrl?: string;
+  ifClientID?: string;
+  ifClientSecret?: string;
+  ifCreateDate?: string;
 }
 
 export type LogLevel = 'NONE' | 'INFO' | 'ERROR' | 'DEBUG' | 'TRACE';
