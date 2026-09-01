@@ -56,9 +56,12 @@ const screenName = computed(() => {
         <Search class="h-[15px] w-[15px]" />
         iFlow 검색…
       </div> -->
+      <!-- 알림 기능 미구현으로 임시 비활성화
       <button class="flex h-9 w-9 items-center justify-center rounded-[10px] border border-line-2 bg-surface text-muted transition hover:border-[#D2D6E2] hover:text-ink">
         <Bell class="h-[17px] w-[17px]" />
       </button>
+      <div class="mx-1 h-5 w-px bg-line-2" />
+      -->
       <div class="mx-1 h-5 w-px bg-line-2" />
       <span class="hidden text-[12.5px] font-semibold text-muted sm:inline">{{ username }}</span>
       <button
